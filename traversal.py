@@ -14,17 +14,22 @@ class Histogram():
     def add(self, dat):
         self.data[dat] = self.data.get(dat, 0) + 1
     
-    def print(self):
+    def print(self, percentage=False):
         print("Histogram of " + self.name)
         key_list = list(sorted(self.data.keys()))
-        class_value = (max(key_list))//10 + 1
+        mi = min(key_list)
+        ma = max(key_list)
+        class_value = (ma-mi)//10 + 1
         # if class_value == 0:
         #     class_value = 1
         tmp = np.zeros(10+1)
         for key in sorted(self.data.keys()):
-            tmp[key//class_value] += self.data[key]
+            tmp[(key-mi)//class_value] += self.data[key]
         for i in range(len(tmp)):
-            print(i*class_value, "-", (i+1)*class_value, ":", tmp[i])
+            if percentage:
+                print(f"{i*class_value+mi} - {(i+1)*class_value+mi} : {tmp[i]/sum(tmp)*100:.2f}%")
+            else:
+                print(f"{i*class_value+mi} - {(i+1)*class_value+mi} : {tmp[i]:.3f}")
 
 
 def get_data(circuit):
@@ -75,14 +80,8 @@ def obtain_gates_pyzx(g):
     circuit = zx.basic_optimization(circuit).to_basic_gates()
     return get_data(circuit)
 
-#random.seed(1337)
-g = zx.generate.cliffords(2,5)
-_g = deepcopy(g)
-zx.simplify.spider_simp(g)
-zx.simplify.to_gh(g)
-zx.draw_matplotlib(g)
-plt.show()
-json.dumps([1,2,3])
+def score(_g):
+        return obtain_gates_pyzx(_g)["gates"]
 
 def check_identity(argg):
     _argg = argg.copy()
@@ -93,16 +92,22 @@ def check_identity(argg):
     circuit = zx.basic_optimization(circuit).to_basic_gates()
     return zx.compare_tensors(circuit,_g,preserve_scalar=False)
 
-from copy import deepcopy
+#random.seed(1337)
 
-# pyzx match ids
+# Generate target graph
+g_circ = zx.generate.cliffords(2,5)
+g = deepcopy(g_circ)
+zx.simplify.spider_simp(g)
+zx.simplify.to_gh(g)
 
+# Traversal
 min_depth = 10000
 min_gates = 10000
 min_g = None
 min_history = ""
+score_histories = []
 
-queue = [(g,0,"")]
+queue = [(g,0,"",[score(g)])]
 count = 0
 ids_hist = Histogram("ids")
 lcomps_hist = Histogram("lcomps")
@@ -110,11 +115,11 @@ pivots_hist = Histogram("pivots")
 depthwise_hist = {}
 gates_hist = Histogram("gates")
 while len(queue) != 0:
-    g1, depth, history = queue.pop(-1)
+    g1, depth, history, score_history = queue.pop(-1)
     count += 1
 
-    if check_identity(g1):
-        print("Identity check ok: ", history)
+    # if check_identity(g1):
+    #     print("Identity check ok: ", history)
 
     #print("Queue length:", len(queue))
 
@@ -127,14 +132,15 @@ while len(queue) != 0:
     # ids_hist.add(len(ids))
     # lcomps_hist.add(len(lcomps))
     # pivots_hist.add(len(pivots))
+
     if not depth in depthwise_hist:
         depthwise_hist[depth] = Histogram("depth " + str(depth))
-        depthwise_hist[depth].add(len(ids) + len(lcomps) + len(pivots))
+        depthwise_hist[depth].add(score(g1))
     else:
-        depthwise_hist[depth].add(len(ids) + len(lcomps) + len(pivots))
+        depthwise_hist[depth].add(score(g1))
 
-    def score(_g):
-        return obtain_gates_pyzx(_g)["gates"]
+    if len(ids) + len(lcomps) + len(pivots) == 0:
+        score_histories.append(score_history)
 
     for id_match in ids:
         g2 = deepcopy(g1)
@@ -146,7 +152,7 @@ while len(queue) != 0:
             g2.remove_vertices(rem_verts)
             if check_isolated_vertices:
                 g2.remove_isolated_vertices()
-            queue.append((g2,depth+1,history + " id"))
+            queue.append((g2,depth+1,history + " id", score_history + [score(g2)]))
             after = g2.num_vertices()
             #print("id ", before, after)
 
@@ -175,7 +181,7 @@ while len(queue) != 0:
             g2.remove_vertices(rem_verts)
             if check_isolated_vertices:
                 g2.remove_isolated_vertices()
-            queue.append((g2,depth+1, history + " pivot"))
+            queue.append((g2,depth+1, history + " pivot", score_history + [score(g2)]))
             after = g2.num_vertices()
            # print("pivot ", before, after)
 
@@ -206,7 +212,7 @@ while len(queue) != 0:
             g2.remove_vertices(rem_verts)
             if check_isolated_vertices:
                 g2.remove_isolated_vertices()
-            queue.append((g2,depth+1, history + " lcomp"))
+            queue.append((g2,depth+1, history + " lcomp", score_history + [score(g2)]))
             after = g2.num_vertices()
             #print("lcomp ", before, after)
 
@@ -230,9 +236,40 @@ while len(queue) != 0:
 
 
 print(min_gates, count)
+# gates_hist.print()
 # for i in range(len(depthwise_hist)):
 #     depthwise_hist[i].print()
 # ids_hist.print()
 # lcomps_hist.print()
 # pivots_hist.print()
-gates_hist.print()
+
+    # Show only fig3
+
+def save_image():
+    fig = zx.draw_matplotlib(g_circ,labels=True,h_edge_draw='box')
+    # circ = zx.basic_optimization(g_circ).to_basic_gates()
+    fig.savefig("before.png")
+    circ = zx.extract.extract_simple(min_g).to_basic_gates()
+    circ = zx.basic_optimization(circ)
+    fig = zx.draw_matplotlib(circ,labels=True,h_edge_draw='box')
+    fig.savefig("after.png")
+
+    # concatenate images
+    from PIL import Image
+    im1 = Image.open("before.png")
+    im2 = Image.open("after.png")
+    dst = Image.new('RGB', (im1.width, im1.height + im2.height))
+    dst.paste(im1, (0, 0))
+    dst.paste(im2, (0, im1.height))
+    dst.save("before-after.png")
+    
+    # remove before.png and after.png
+    import os
+    os.remove("before.png")
+    os.remove("after.png")
+
+def plot_traversal_graph():
+    for i, history in enumerate(score_histories):
+        x = list(range(1,len(history)+1))
+        plt.plot(x, history, alpha=0.05)
+    plt.show()
