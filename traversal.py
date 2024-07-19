@@ -1,14 +1,15 @@
 import sys; sys.path.insert(0, '../..') # So that we import the local copy of pyzx if you have installed from Github
 import random
-import pyzx as zx
 from copy import deepcopy
 import json
-import numpy as np
-import matplotlib.pyplot as plt
 from abc import ABC
 from abc import abstractmethod
-import networkx as nx
+import pickle
 
+import networkx as nx
+import pyzx as zx
+import numpy as np
+import matplotlib.pyplot as plt
 
 class Histogram():
     def __init__(self, name=""):
@@ -34,6 +35,33 @@ class Histogram():
                 print(f"{i*class_value+mi} - {(i+1)*class_value+mi} : {tmp[i]/sum(tmp)*100:.2f}%")
             else:
                 print(f"{i*class_value+mi} - {(i+1)*class_value+mi} : {tmp[i]:.3f}")
+
+class Scatter():
+    def __init__(self, name=""):
+        self.name = name
+        self.data = []
+        self.load()
+    
+    def add(self, x, y):
+        self.data.append((x,y))
+
+    def print(self):
+        plt.scatter(*zip(*self.data), alpha=0.05)
+        plt.title(self.name)
+    
+    def save(self):
+        pickle.dump(self.data, open(self.name + ".pkl", "wb"))
+        
+    def load(self):
+        # if file exists
+        try:
+            self.data = pickle.load(open(self.name + ".pkl", "rb"))
+        except Exception as e:
+            print(e)
+
+scatter_id = Scatter("id")
+scatter_lcomp = Scatter("lcomp")
+scatter_pivot = Scatter("pivot")
 
 def dice(p):
     return random.random() < p
@@ -106,6 +134,7 @@ class Optimizer(ABC):
             except Exception as e:
                 print(e)
 
+        database = []
         queue = [(self.g,0,"",[self.score(self.g)])]
         count = 0
         ids_hist = Histogram("ids")
@@ -141,6 +170,7 @@ class Optimizer(ABC):
             graph_hash = nx.weisfeiler_lehman_graph_hash(self.get_nx_graph(g1))
             if graph_hash in visited:
                 self.score_histories.append(score_history)
+                database.append(g1)
                 continue
             else:
                 # zx.draw_matplotlib(g1,labels=True,h_edge_draw='box').savefig("current.png")
@@ -167,6 +197,12 @@ class Optimizer(ABC):
                             queue.append((g2,depth+1,history + f" {self.actions[action]['name']}({new_score - current_score})", score_history + [new_score]))
                         after = g2.num_vertices()
                         #print("id ", before, after)
+                        if self.actions[action]["name"] == "id":
+                            scatter_id.add(len(g1.neighbors(match[0])), new_score-current_score)
+                        elif self.actions[action]["name"] == "lcomp":
+                            scatter_lcomp.add(len(g1.neighbors(match[0])), new_score-current_score)
+                        elif self.actions[action]["name"] == "pivot":
+                            scatter_pivot.add(len(g1.neighbors(match[0])), new_score-current_score)
 
                         # _g2 = deepcopy(g2)
                         # circ = zx.extract_circuit(_g2)
@@ -179,21 +215,29 @@ class Optimizer(ABC):
                             self.min_score = new_score
                             min_history = history + f" {self.actions[action]['name']}({new_score - current_score})"
                             self.min_g = g2
-                            print(self.min_score, min_history)
+                            # print(self.min_score, min_history)
                     except Exception as e:
                         print(e)
 
             if branch == 0:
                 self.score_histories.append(score_history)
+                database.append(g1)
 
 
-
+        # databases = []
+        # try:
+        #     left = pickle.load(open("database.pkl", "rb"))
+        #     databases.extend(left)
+        # except Exception as e:
+        #     print(e)
+        # databases.append(database)
+        # pickle.dump(databases, open("database.pkl", "wb"))
         
         print("Min score: ", self.min_score)
         print("Min history: ", min_history)
         print("Traversal count: ", count)
 
-        self.save_image()
+        #self.save_image()
     
     def check_identity(self, argg):
         _argg = argg.copy()
@@ -297,10 +341,22 @@ class Optimizer1(Optimizer):
             circuit = zx.basic_optimization(circuit).to_basic_gates()
             return get_data(circuit)
 
-while True:
+
+for i in range(5):
     g_circ = zx.generate.cliffords(5,20)
     opt1 = Optimizer1(g_circ)
     opt1.run()
     import time
     time.sleep(1)
     print()
+
+# scatter_id.save()
+# scatter_lcomp.save()
+# scatter_pivot.save()
+
+scatter_id.print()
+plt.show()
+scatter_lcomp.print()
+plt.show()
+scatter_pivot.print()
+plt.show()
