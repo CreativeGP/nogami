@@ -395,7 +395,7 @@ def pivot_gadget(g:BaseGraph, v0, v1) -> RewriteOutputType[ET, VT]:
     ``m[3]`` : list of zero or one boundaries adjacent to ``m[1]``.
     """
     vertices_to_gadgetize = v1
-    gadgetize(vertices_to_gadgetize)
+    gadgetize(g, vertices_to_gadgetize)
     return pivot(v0, v1)
 
 def gadgetize(g:BaseGraph, vertices: VT) -> None:
@@ -582,3 +582,38 @@ def merge_phase_gadgets(g:BaseGraph, vertexs: Tuple[VT]) -> RewriteOutputType[ET
         if g.merge_vdata is not None:
             g.merge_vdata(v, w)
     return ({}, rem, [], False)
+
+def apply_rule(g:BaseGraph, edge_table, rem_vert, rem_edge, check_isolated_vertices):
+    g.add_edge_table(edge_table)
+    g.remove_edges(rem_edge)
+    g.remove_vertices(rem_vert)
+    if check_isolated_vertices:
+        g.remove_isolated_vertices()
+
+def spider_fusion(g:BaseGraph, neighs):
+    rem_verts = []
+    etab = dict()
+
+    if g.row(neighs[0]) == 0:
+        v0, v1 = neighs[1], neighs[0]
+    else:
+        v0, v1 = neighs[0], neighs[1]
+    ground = g.is_ground(v0) or g.is_ground(v1)
+    if ground:
+        g.set_phase(v0, 0)
+        g.set_ground(v0)
+    else:
+        g.add_to_phase(v0, g.phase(v1))
+    if g.phase_tracking:
+        g.fuse_phases(v0, v1)
+    # always delete the second vertex in the match
+    rem_verts.append(v1)
+    # edges from the second vertex are transferred to the first
+    for w in g.neighbors(v1):
+        if v0 == w:
+            continue
+        e = g.edge(v0, w)
+        if e not in etab:
+            etab[e] = [0, 0]
+        etab[e][g.edge_type(g.edge(v1, w)) - 1] += 1
+    return (etab, rem_verts, [], True)
