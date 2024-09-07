@@ -8,9 +8,12 @@ from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 import gym
 import networkx as nx
+import torch
+from torch_geometric.data import Batch, Data
 import numpy as np
 import pyzx as zx
-import torch
+
+
 from gym.spaces import Box, Discrete, Graph, MultiDiscrete
 from pyzx.circuit import CNOT, HAD, SWAP, Circuit
 from pyzx.extract import bi_adj, connectivity_from_biadj, greedy_reduction, id_simp, max_overlap, permutation_as_swaps
@@ -30,6 +33,7 @@ def handler(signum, frame):
 class RLContext():
     def __init__(self):
         self.shape=3000
+        self.device = "cuda"
 
 
     def update_state(self, graph):
@@ -212,6 +216,70 @@ class RLContext():
         # identifier[:n_nodes] = [-1] * n_nodes
         # identifier = torch.tensor(identifier)
         return action_identifier
+
+        # critic用の観測情報を作る
+    # zxdiagramから(node_features, edge_index, edge_features)を作成して、torch.tensorで返す
+    # node_features: [位相情報8個, 入力境界？, 出力境界？, フェーズガジェット？]
+    # edge_features: [1, 0, 0]固定
+    def value_obs(self, graph):
+        Graph_nx = nx.Graph()
+        v_list = list(graph.vertices())  # vertices list
+        e_list = list(graph.edge_set())  # edges list
+        # create networkx graph
+        Graph_nx.add_nodes_from(v_list)
+        Graph_nx.add_edges_from(e_list)
+        
+        # relabel 0->N nodes
+        mapping = {node: i for i, node in enumerate(Graph_nx.nodes)}
+        identifier = [0 for _ in mapping.items()]
+        for key in mapping.keys():
+            identifier[mapping[key]] = key
+        V = nx.relabel_nodes(Graph_nx, mapping)
+
+        neighbors_inputs = []
+        for vertice in list(graph.inputs()):
+            neighbors_inputs.append(list(graph.neighbors(vertice))[0])
+
+        neighbors_outputs = []
+        for vertice in list(graph.outputs()):
+            neighbors_outputs.append(list(graph.neighbors(vertice))[0])
+
+        node_features = []
+        for node in sorted(V.nodes):
+            real_node = identifier[node]
+            # Features: Onehot PHASE, Frontier In, Frontier 0ut, Phase Gadget, NOT INCLUDED EXTRACTION COST
+            node_feature = [0.0 for _ in range(11)]
+
+            # Frontier Node
+            if real_node in graph.inputs():
+                node_feature[8] = 1.0
+            elif real_node in graph.outputs():
+                node_feature[9] = 1.0
+            else:
+                oh_phase_idx = int(graph.phase(real_node) / (0.25))
+                node_feature[oh_phase_idx] = 1.0
+                if graph.neighbors(real_node) == 1:  # Phase Gadget
+                    node_feature[10] = 1.0
+
+            node_features.append(node_feature)
+
+        # Convert edges into bidirectional
+        edge_list = list(V.edges)
+        for node1, node2 in copy.copy(edge_list):
+            edge_list.append((node2, node1))
+
+        edge_features = []
+        for node1, node2 in edge_list:
+            # Edge in graph, pull node, pushed node.
+            edge_feature = [1.0, 0.0, 0.0]
+            edge_features.append(edge_feature)
+        
+        edge_index_value = torch.tensor(edge_list).t().contiguous()
+        x_value = torch.tensor(node_features).view(-1, 11)
+        x_value = x_value.type(torch.float32)
+        edge_features = torch.tensor(edge_features).view(-1, 3)
+        return Data(x=x_value.to(self.device), edge_index=edge_index_value.to(self.device), edge_attr=edge_features.to(self.device))
+
 
     # NOTE(malick): これがコンテキストを変更しないように注意
     def step(self, graph, action):
