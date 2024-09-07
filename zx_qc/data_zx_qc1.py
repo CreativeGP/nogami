@@ -6,8 +6,8 @@ from fractions import Fraction
 import pandas as pd
 import time
 
-num_qubits = 20
-num_depth = 100
+num_qubits = 10
+num_depth = 50
 
 num_sampling = 1000
 #zx-diagram data collection
@@ -19,8 +19,7 @@ for i in range(num_sampling):
     start_time = time.time()
     random.seed(i)
     diagram = zx.generate.cliffordT(num_qubits, num_depth)
-    zx.spider_simp(diagram, quiet=True)
-    zx.to_gh(diagram)
+    zx.simplify.full_reduce(diagram)
     diagram.normalize()
     copy = deepcopy(diagram)
     qc = zx.extract_circuit(copy)
@@ -32,7 +31,6 @@ for i in range(num_sampling):
     #print(num_e)
     num_v = diagram.num_vertices()-2*num_qubits
     #print(num_v)
-
     tmp_edge = diagram.edge_set()
     flat = [item for sublist in tmp_edge for item in sublist]
     ct = Counter(flat)
@@ -41,7 +39,6 @@ for i in range(num_sampling):
     tmp2 = 2 * len(ct1)
     complicated_index = len([i for i in ct1.values() if i>3])
     num_verticallyconnected_edges = int((tmp1-tmp2)/2)
-
     tmp_phases = diagram.phases()
     tmp_phases1 = [float(2*value) for value in tmp_phases.values()]
     noncliffordphases = [Fraction(x/2) for x in tmp_phases1 if int(x*10)%10==5]
@@ -87,7 +84,7 @@ df_qc1 = pd.DataFrame(tmp_qc1_all, columns=columns_qc_list)
 print("データが完成しました。")
 
 # store all data
-save_dir = "/home/hinog/src/python3/pyzx_utils/zx_qc/data/pkl/"
+save_dir = "/home/hinog/src/python3/pyzx_utils/zx_qc/data/pkl1/"
 df_dg.to_pickle(f"{save_dir}{num_qubits}_{num_depth}_zxdiagram.pkl")
 df_qc.to_pickle(f"{save_dir}{num_qubits}_{num_depth}_qc.pkl")
 df_qc1.to_pickle(f"{save_dir}{num_qubits}_{num_depth}_qc1.pkl")
