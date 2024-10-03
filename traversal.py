@@ -799,8 +799,11 @@ class RiuOptimizer_WithPolicy(TraversalOptimizer):
         if self.program_counter >= len(self.search_policy):
             return False
         
-        self.current_search = self.parse_parameter(self.search_policy[self.program_counter])
-        self.current_condition = self.parse_parameter(self.search_policy[self.program_counter+1])
+        try:
+            self.current_search = self.parse_parameter(self.search_policy[self.program_counter])
+            self.current_condition = self.parse_parameter(self.search_policy[self.program_counter+1])
+        except:
+            return False
         
         # 即時実行コマンドがあれば、実行して一行進める
         if self.current_search['op'][0] == '!':
@@ -1071,7 +1074,8 @@ if __name__ == '__main__':
     }
     for i in range(100):
         # random.seed(i)
-        g_circ = zx.generate.cliffordT(40,200)
+        g_circ = zx.generate.cliffordT(10,50)
+        original_tensor = g_circ.to_tensor()
 
         # calculate crude gates
         _g_circ = g_circ.copy()
@@ -1082,18 +1086,23 @@ if __name__ == '__main__':
 
 
         # divide_circuit(g_circ, 10)
-        opt1 = RiuOptimizer_WithPolicy(g_circ, program)
+        opt1 = RiuOptimizer_WithPolicy(g_circ, program2)
         opt1.run()
 
         circuit = zx.extract.extract_circuit(opt1.min_g.copy()).to_basic_gates()
         circuit = zx.basic_optimization(circuit).to_basic_gates()
-        print("no opt", gates_no_opt)
-        print("bo", score_heavy(_g_circ))
-        print("Min: ", len(circuit.gates), len(circuit.gates) - gates_no_opt)
+        # print("no opt", gates_no_opt)
+        # print("bo", score_heavy(_g_circ))
+        # print("Min: ", len(circuit.gates), len(circuit.gates) - gates_no_opt)
+        circuit_tensor = circuit.to_tensor()
+        if zx.compare_tensors(original_tensor, circuit_tensor):
+            print("OK")
+        else:
+            print("NG")
 
         results['fromBO'].append(opt1.min_score - opt1.initial_score)
         results["overall"].append(opt1.min_score - gates_no_opt)
-        print()
+        # print()
 
     print("max", np.max(results['fromBO']), "min", np.min(results['fromBO']), "mean", np.mean(results['fromBO']), "std", np.std(results['fromBO']))
     print("max", np.max(results['overall']), "min", np.min(results['overall']), "mean", np.mean(results['overall']), "std", np.std(results['overall']))
