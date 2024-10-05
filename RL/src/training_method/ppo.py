@@ -12,8 +12,8 @@ from distutils.util import strtobool
 from torch_geometric.data import Batch, Data
 
 
-from util import Logger, Timer, rootdir
-from training_method.trajectory import Trajectory
+from src.util import Logger, Timer, rootdir
+from src.training_method.trajectory import Trajectory
 
 class PPO():
     def __init__(self, envs, agent, args, run_name):

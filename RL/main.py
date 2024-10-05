@@ -6,7 +6,7 @@ from distutils.util import strtobool
 import torch
 import gym
 
-from .util import rootdir
+from src.util import rootdir
 
 def parse_args():
     # fmt: off
@@ -39,8 +39,10 @@ def parse_args():
         help="weather to capture videos of the agent performances (check out `videos` folder)")
 
     # Algorithm specific arguments
-    parser.add_argument("--use-async", type=bool, default=True, help="use parallel?")
-    parser.add_argument("--num-envs", type=int, default=8,
+    parser.add_argument("--use-async", type=bool, default=False, help="use parallel?")
+    parser.add_argument("--num-process", type=int, default=8,
+        help="the number of multiprocesses") #default 8
+    parser.add_argument("--num-envs", type=int, default=1,
         help="the number of parallel game environments") #default 8
     parser.add_argument("--num-steps", type=int, default=2048,
         help="the number of steps to run in each environment per policy rollout")
@@ -97,14 +99,14 @@ def make_env(gym_id, seed, idx, capture_video, run_name, qubits, depth, gate_typ
 gym.envs.registration.register(
     id='zx-v0',
     # entry_point=lambda qubit, depth: ZXEnv(qubit, depth),
-    entry_point=f"agenv.zxopt_env:ZXEnv",
+    entry_point=f"src.agenv.zxopt_env:ZXEnv",
 )
 print("__name__", __name__)
 
 if __name__ == "__main__":
-    from training_method.ppo import PPO
-    from agenv.zxopt_agent import AgentGNN
-    from util import CustomizedAsyncVectorEnv, CustomizedSyncVectorEnv
+    from src.training_method.ppo import PPO
+    from src.agenv.zxopt_agent import AgentGNN
+    from src.util import CustomizedAsyncVectorEnv, CustomizedSyncVectorEnv
 
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")

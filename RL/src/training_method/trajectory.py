@@ -19,12 +19,8 @@ class Trajectory():
         self.length = 0
         self.global_step = 0
         start_time = time.time()
-        self.s0, reset_info = self.envs.reset()
+        self.s0, self.next_info = self.envs.reset()
         self.next_s = self.s0
-        self.next_info = []
-        for i in range(self.envs.num_envs):
-            self.next_info.append({key: value[i] for key, value in reset_info.items()})
-
         self.next_done = torch.zeros(self.envs.num_envs).to(self.device)
 
     
@@ -57,29 +53,21 @@ class Trajectory():
             self.logprobs[step] = logprob
 
             # 観測情報を取得 (s a r s')
-            s_, r, done, deprecated, info = self.envs.step(action_ids.cpu().numpy())
+            s_, r, done, deprecated, self.next_info = self.envs.step(action_ids.cpu().numpy())
 
             self.rewards[step] = torch.tensor(r).to(self.device).view(-1)
             self.next_done = torch.Tensor(done).to(self.device)
             self.next_s = s_
-            self.next_info = []
-            # NOTE(cgp): ここ先にバッチに変えておく方がいいのかなぁ...
-            for i in range(self.envs.num_envs):
-                self.next_info.append({key: value[i] for key, value in info.items()})
 
             # logging
             if not self.logger is None:
-                if "action" in info.keys():
-                    for element in info["action"]:
-                        self.logger.data['action_counter'].append(element)
+                for idx, info in enumerate(self.next_info):
+                    self.logger.data['action_counter'].append(info['action'])
+                    if not info['nodes'] is None:
+                        self.logger.data['action_nodes'].extend(info['nodes'])
 
-                    for element in info["nodes"]:
-                        if element is not None:
-                            for node in element:
-                                self.logger.data['action_nodes'].append(node)
-
-                if info != {} and "final_info" in info.keys():
-                    for idx, item in enumerate(info["final_info"]):
+                    if 'final_info' in info:
+                        item = info['final_info']
                         if done[idx]:
                             # print(f"self.global_step={self.global_step}, episodic_return={item['episode']['r']}")
                             self.logger.data['cumulative_reward'].append(item["episode"]["r"])
