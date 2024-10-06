@@ -62,8 +62,9 @@ class Trajectory():
             # logging
             if not self.logger is None:
                 for idx, info in enumerate(self.next_info):
-                    self.logger.data['action_counter'].append(info['action'])
-                    if not info['nodes'] is None:
+                    if 'action' in info and not info['action'] is None:
+                        self.logger.data['action_counter'].append(info['action'])
+                    if 'nodes' in info and not info['nodes'] is None:
                         self.logger.data['action_nodes'].extend(info['nodes'])
 
                     if 'final_info' in info:

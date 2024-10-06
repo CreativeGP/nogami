@@ -5,7 +5,10 @@ import gym
 
 def rootdir(s):
     import sys
-    return sys.path[0]+s
+    root = sys.path[0]
+    if not root.endswith('/'):
+        root += '/'
+    return root+s
 
 def show_autograd_graph(grad_fn, indent=0):
     print((' '*indent) + grad_fn.__class__.__name__)

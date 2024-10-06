@@ -46,7 +46,7 @@ class PPO():
         self.agent = agent
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5)
         
-        self.traj = Trajectory(self.envs, self.agent, logger=self.logger)
+        self.traj = Trajectory(self.envs, self.agent, logger=self.logger, device=self.device)
         self.traj.reset()
         num_updates = self.args.total_timesteps // self.args.batch_size
 
