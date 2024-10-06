@@ -5,7 +5,7 @@ import gym
 
 def rootdir(s):
     import sys
-    root = sys.path[0]
+    root = '/'.join(__file__.split('/')[:-2])
     if not root.endswith('/'):
         root += '/'
     return root+s
