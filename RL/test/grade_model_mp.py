@@ -10,7 +10,6 @@ import multiprocessing as mp
 import argparse
 
 import gym
-import gym_zx
 import pandas as pd
 import numpy as np
 import pyzx as zx

@@ -24,6 +24,7 @@ def parse_args():
     parser.add_argument("--grading-data", type=str,)
     parser.add_argument("--gate-type", type=str,)
     parser.add_argument("-n", type=int, default=-1,)
+    parser.add_argument("--use-space", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,)
 
     return parser.parse_known_args()[0]
 
@@ -40,7 +41,10 @@ if __name__ == "__main__":
     print("Grade for model: ", args.grading_data)
     print("Gate type: ", args.gate_type)
     print()
-    print("qubit gate\tmean\tstd\tn")
+    if args.use_space:
+        print("qubit depth mean std n")
+    else:
+        print("qubit gate\tmean\tstd\tn")
 
     qubits_depths = {
         5: [55, 105, 155, 210],
@@ -60,6 +64,10 @@ if __name__ == "__main__":
                 if args.n == -1:
                     args.n = len(reduction)
                 reduction = np.random.choice(reduction, args.n)
-                print(f"{qubit} {depth}\t{np.mean(reduction):.3f}\t{np.std(reduction):.3f}\t{args.n}")
+
+                if args.use_space:
+                    print(f"{qubit} {depth} {np.mean(reduction):.3f} {np.std(reduction):.3f} {args.n}")
+                else:
+                    print(f"{qubit} {depth}\t{np.mean(reduction):.3f}\t{np.std(reduction):.3f}\t{args.n}")
             except Exception as e:
                 pass
