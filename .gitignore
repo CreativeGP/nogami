@@ -1,3 +1,4 @@
 __pycache__/
 pickles/
-src/RL/pyzx
+RL/src/pyzx/
+RL/runs/
