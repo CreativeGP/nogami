@@ -1,12 +1,12 @@
 import random
 import time
+from socket import gethostname
 
 import numpy as np
 import gym
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch_geometric
 
 from distutils.util import strtobool
 from torch_geometric.data import Batch, Data
@@ -234,6 +234,22 @@ class PPO():
         self.logger.write_mean('charts/wins_vs_pyzx', 'wins_vs_pyzx', self.traj.global_step)
         self.logger.write_mean('charts/swap_gates', 'swap_gates', self.traj.global_step)
         self.logger.write_mean('charts/pyzx_swap_gates', 'pyzx_swap_gates', self.traj.global_step)
+
+        total_weights = 0
+        total_elements = 0
+        for param in self.agent.actor_gnn.parameters():
+            total_weights += param.sum()
+            total_elements += param.numel()
+        weights_mean = total_weights / total_elements
+        self.logger.writer.add_scalar('charts/actor_weights_mean', weights_mean, self.traj.global_step)
+        
+        total_weights = 0
+        total_elements = 0
+        for param in self.agent.critic_gnn.parameters():
+            total_weights += param.sum()
+            total_elements += param.numel()
+        weights_mean = total_weights / total_elements
+        self.logger.writer.add_scalar('charts/critic_weights_mean', weights_mean, self.traj.global_step)
 
         self.logger.write_histogram('histograms/reward_distribution', 'cumulative_reward', self.traj.global_step)
         self.logger.write_histogram('histograms/episode_length_distribution', 'cumulative_episode_length', self.traj.global_step)

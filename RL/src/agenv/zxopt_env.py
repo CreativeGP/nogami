@@ -928,6 +928,8 @@ class ZXEnv(ZXEnvBase):
             self.pivot_info_dict = self.match_pivot_parallel() | self.match_pivot_boundary() | self.match_pivot_gadget()
             self.gadget_info_dict, self.gadgets = self.match_phase_gadgets()
             self.gadget_fusion_ids = list(self.gadget_info_dict)
+            match_lcomp = self.match_lcomp()
+            match_ids = self.match_ids()
             actions_available = len(self.match_lcomp()) + len(self.pivot_info_dict.keys()) + len(self.match_ids())
             if actions_available == 0:
                 print("Generating new circuit")
@@ -952,7 +954,7 @@ class ZXEnv(ZXEnvBase):
             "graph_obs": self.graph,
             "full_reduce_time": full_reduce_end-full_reduce_start,
             "piv_nodes": self.pivot_info_dict,
-            "lcomp_nodes": self.match_lcomp(),
+            "lcomp_nodes": match_lcomp,
             "iden_nodes": self.match_ids(),
             "gf_nodes": self.gadget_info_dict,
         }

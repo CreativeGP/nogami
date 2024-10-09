@@ -2,6 +2,7 @@ import os
 import argparse
 import time
 from distutils.util import strtobool
+from socket import gethostname
 
 import torch
 import gym
@@ -92,7 +93,7 @@ def make_env(gym_id, seed, idx, capture_video, run_name, qubits, depth, gate_typ
         env = gym.make(gym_id, qubits=qubits, depth=depth, gate_type=gate_type)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx == 0:
-            env = gym.wrappers.RecordVideo(env, rootdir(f"videos/{run_name}"))
+            env = gym.wrappers.RecordVideo(env, rootdir(f"/videos/{run_name}"))
         return env
 
     return thunk
@@ -113,7 +114,7 @@ if __name__ == "__main__":
     #Training size
     qubits = 5
     depth = 55
-    run_name = f"{args.gym_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"{args.gym_id}__{args.exp_name}__{gethostname()}__{args.seed}__{int(time.time())}"
     if args.use_async:
         envs = CustomizedAsyncVectorEnv(
             [make_env(args.gym_id, args.seed + i, i, args.capture_video, run_name, qubits, depth, args.gate_type) for i in range(args.num_envs)],

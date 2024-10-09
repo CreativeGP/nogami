@@ -1,13 +1,17 @@
 import time
+from socket import gethostname
 
 import numpy as np
 import gym
 
+# NOTE(cgp): /は含まないディレクトリパスを返すので注意
 def rootdir(s):
     import sys
     root = '/'.join(__file__.split('/')[:-2])
-    if not root.endswith('/'):
-        root += '/'
+    # if not root.endswith('/'):
+    #     root += '/'
+    if root.endswith('/'):
+        root = root[:-1]
     return root+s
 
 def show_autograd_graph(grad_fn, indent=0):
@@ -69,6 +73,7 @@ class Logger():
             "hyperparameters",
             "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
         )
+        self.writer.add_text("hostname", gethostname())
     
     # helper function to write data
     def write_mean(self, title, key, global_step):

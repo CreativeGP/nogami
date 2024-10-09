@@ -57,7 +57,7 @@ def make_env(gym_id, seed, idx, capture_video, run_name, qubits, gates, gate_typ
         env = gym.make(gym_id, qubits = qubits, depth = gates, gate_type = gate_type)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx == 0:
-            env = gym.wrappers.RecordVideo(env, rootdir(f"videos/{run_name}"))
+            env = gym.wrappers.RecordVideo(env, rootdir(f"/videos/{run_name}"))
         # env.seed(seed)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -66,7 +66,7 @@ def make_env(gym_id, seed, idx, capture_video, run_name, qubits, gates, gate_typ
     return thunk
 
 
-def get_results(param, target):
+def get_results(param):
     global args
     rl_time, full_reduce_time = [], []
     qubits, depth = param
@@ -201,18 +201,18 @@ def get_results(param, target):
         print("2q initial", sum(rl_stats["initial_2q"]) / len(rl_stats["initial_2q"]))
         print("Wins:", wins)
 
-    if not os.path.exists(rootdir(f"/grading_data/{model_file_name}")):
-        os.makedirs(rootdir(f"/grading_data/{model_file_name}"))
-    rl_action_pattern.to_csv(rootdir(f"/grading_data/{model_file_name}/action_pattern_{qubits}x{depth}.json"), index=False)  
+    if not os.path.exists(rootdir(f"/test/grading_data/{model_file_name}")):
+        os.makedirs(rootdir(f"/test/grading_data/{model_file_name}"))
+    rl_action_pattern.to_csv(rootdir(f"/test/grading_data/{model_file_name}/action_pattern_{qubits}x{depth}.json"), index=False)  
    
-    with open(rootdir(f"/grading_data/{model_file_name}/rl_stats_stopping_{qubits}x{depth}.json"), "w") as f:
+    with open(rootdir(f"/test/grading_data/{model_file_name}/rl_stats_stopping_{qubits}x{depth}.json"), "w") as f:
         json.dump(rl_stats, f)
-    with open(rootdir(f"/grading_data/{model_file_name}/pyzx_stats_stopping_{qubits}x{depth}.json"), "w") as f:
+    with open(rootdir(f"/test/grading_data/{model_file_name}/pyzx_stats_stopping_{qubits}x{depth}.json"), "w") as f:
         json.dump(pyzx_stats, f)
 
-    with open(rootdir(f"/grading_data/{model_file_name}/initial_stats_stopping_{qubits}x{depth}.json"), "w") as f:
+    with open(rootdir(f"/test/grading_data/{model_file_name}/initial_stats_stopping_{qubits}x{depth}.json"), "w") as f:
         json.dump(initial_stats, f)
-    with open(rootdir(f"/grading_data/{model_file_name}/bo_stats_stopping_{qubits}x{depth}.json"), "w") as f:
+    with open(rootdir(f"/test/grading_data/{model_file_name}/bo_stats_stopping_{qubits}x{depth}.json"), "w") as f:
         json.dump(bo_stats, f)
     
     return np.mean(full_reduce_time), np.mean(rl_time), np.std(full_reduce_time), np.std(rl_time)
@@ -241,12 +241,12 @@ if __name__ == "__main__":
         fr_time_var, rl_time_var = [],[]
         for depth in depths:
             print(f"Qubits, Depth {qubit, depth}")
-            fr_time, rl_time, fr_var, rl_var = get_results((qubit,depth), "ncg")
+            fr_time, rl_time, fr_var, rl_var = get_results((qubit,depth))
             fr_time_depth.append(fr_time)
             rl_time_depth.append(rl_time)
             fr_time_var.append(fr_var)
             rl_time_var.append(rl_var)
             print(rl_time, rl_var)
             
-        with open(rootdir(f"/grading_data/{model_file_name}/time_depth_{qubit}x{depth}.json")) as f:
+        with open(rootdir(f"/test/grading_data/{model_file_name}/time_depth_{qubit}x{depth}.json"), 'w') as f:
             json.dump({"full_time":fr_time_depth, "rl_time":rl_time_depth, "full_var":fr_time_var, "rl_var":rl_time_var}, f)
