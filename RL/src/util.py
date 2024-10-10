@@ -66,7 +66,7 @@ class Logger():
 
         self.run_name = run_name
         self.args = args
-        self.writer = torch.utils.tensorboard.SummaryWriter(rootdir(f"runs/{run_name}"))
+        self.writer = torch.utils.tensorboard.SummaryWriter(rootdir(f"/runs/{run_name}"))
         self.data = {}
 
         self.writer.add_text(

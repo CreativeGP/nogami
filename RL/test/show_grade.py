@@ -21,8 +21,8 @@ device = torch.device("cuda")
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--grading-data", type=str,)
-    parser.add_argument("--gate-type", type=str,)
+    parser.add_argument("--grading-data", type=str, default="/home/wsl/Research/nogami/zx/RL/test/grading_data/state_dict_3784704_zx-v0__main__8983440__1727192464_model5x70_gates_new/")
+    parser.add_argument("--gate-type", type=str, default="gates")
     parser.add_argument("-n", type=int, default=-1,)
     parser.add_argument("--use-space", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,)
 
@@ -42,9 +42,9 @@ if __name__ == "__main__":
     print("Gate type: ", args.gate_type)
     print()
     if args.use_space:
-        print("qubit depth mean std n")
+        print("qubit depth gr(mean) gr(std) win(mean) win(std) n")
     else:
-        print("qubit gate\tmean\tstd\tn")
+        print("qubit\tgate\tgr(mean)\tgr(std)\twin(mean)\twin(std)\tn")
 
     qubits_depths = {
         5: [55, 105, 155, 210],
@@ -60,14 +60,20 @@ if __name__ == "__main__":
                     rl_stats = json.load(f)            
                 with open(f"{args.grading_data}/initial_stats_stopping_{qubit}x{depth}.json") as f:
                     initial_stats = json.load(f)
+                with open(f"{args.grading_data}/pyzx_stats_stopping_{qubit}x{depth}.json") as f:
+                    pyzx_stats = json.load(f)
                 reduction = np.array(rl_stats[args.gate_type]) - np.array(initial_stats[args.gate_type])
+                wins = []
+                for rl, pyzx in zip(rl_stats[args.gate_type], pyzx_stats[args.gate_type]):
+                    wins.append(1 if rl < pyzx else -1)
                 if args.n == -1:
                     args.n = len(reduction)
-                reduction = np.random.choice(reduction, args.n)
+                else:
+                    reduction = np.random.choice(reduction, args.n)
 
                 if args.use_space:
-                    print(f"{qubit} {depth} {np.mean(reduction):.3f} {np.std(reduction):.3f} {args.n}")
+                    print(f"{qubit} {depth} {np.mean(reduction):.3f} {np.std(reduction):.3f} {np.mean(wins):.3f} {np.std(wins):.3f} {args.n}")
                 else:
-                    print(f"{qubit} {depth}\t{np.mean(reduction):.3f}\t{np.std(reduction):.3f}\t{args.n}")
+                    print(f"{qubit}\t{depth}\t{np.mean(reduction):.3f}\t{np.std(reduction):.3f}\t{np.mean(wins):.3f}\t{np.std(wins):.3f}\t{args.n}")
             except Exception as e:
                 pass

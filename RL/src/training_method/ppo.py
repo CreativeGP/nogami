@@ -75,7 +75,7 @@ class PPO():
         NUM_UPDATES = 2048
         for update in range(NUM_UPDATES):
             if update % 10 == 1:
-                torch.save(self.agent.state_dict(), rootdir(f"checkpoints/state_dict_{self.run_name}_{self.traj.global_step}_model5x70_gates_new.pt"))
+                torch.save(self.agent.state_dict(), rootdir(f"/checkpoints/state_dict_{self.run_name}_{self.traj.global_step}_model5x70_gates_new.pt"))
             if self.args.anneal_lr:
                 frac = max(1.0 / 100, 1.0 - (update - 1.0) / (NUM_UPDATES * 5.0 / 6))
                 lrnow = frac * self.args.learning_rate
