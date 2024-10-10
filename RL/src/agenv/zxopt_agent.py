@@ -426,6 +426,8 @@ class AgentGNN(nn.Module):
         else:
             policy_obs = self.get_policy_feature_graph(graph,info)
         logits = self.actor(policy_obs)
+
+        # print("logits", len(list(logits.flatten())), list(logits.flatten()))
         
         # actionノードの
         batch_logits = torch.zeros([policy_obs.num_graphs, self.obs_shape]).to(device)
@@ -441,6 +443,7 @@ class AgentGNN(nn.Module):
             # actionノードのnode_featureを取得
             probs = logits[policy_obs.batch == b][action_nodes]
             batch_logits[b, : probs.shape[0]] = probs.flatten()
+            # print("batch logits", batch_logits[b].mean(), batch_logits[b].std(), batch_logits[b].ent())
             act_mask[b, : probs.shape[0]] = torch.tensor([True] * probs.shape[0])
             act_ids[b, : action_nodes.shape[0]] = ids[action_nodes]
             action_logits = torch.cat((action_logits, probs.flatten()), 0).reshape(-1)
@@ -452,6 +455,8 @@ class AgentGNN(nn.Module):
         # actionノードの
         if action is None:
             action = categoricals.sample()
+            # print(f"action: {action}")
+            # exit(0)
             batch_id = torch.arange(policy_obs.num_graphs)
             action_id = act_ids[batch_id, action]
 

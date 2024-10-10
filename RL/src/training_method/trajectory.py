@@ -14,7 +14,7 @@ class Trajectory():
         self.logger = logger
         if hasattr(self.agent, "get_value"):
             self.collect_value = True
-
+    
     def reset(self):
         self.length = 0
         self.global_step = 0
@@ -117,3 +117,5 @@ class Trajectory():
         self.returns = returns
         self.b_advantages = advantages.reshape(-1)
         self.b_returns = returns.reshape(-1)
+
+        # print(self.rewards.mean())

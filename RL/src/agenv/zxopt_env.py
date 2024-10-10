@@ -29,7 +29,7 @@ def handler(signum, frame):
 
 class ZXEnvBase(gym.Env):
     def __init__(self):
-        self.device = "cuda"
+        # self.device = "cuda"
         self.clifford = False
         self.shape = 3000        
         # d["qubits"] = circuit.qubits
@@ -160,7 +160,7 @@ class ZXEnvBase(gym.Env):
             self.opt_episode_len = self.episode_len
             self.best_action_stats = copy.deepcopy(self.episode_stats)
 
-        # NOTE(cgp): 報酬の設定
+        # NOTE(cgp): 報酬の設定 削減率(self.max_compression = 55)
         reward += (self.current_gates - new_gates) / self.max_compression
         self.episode_reward += reward
         # print(self.current_gates, new_gates, reward, self.episode_reward)
@@ -180,7 +180,7 @@ class ZXEnvBase(gym.Env):
         if (
             remaining_actions == 0 or act_type == "STOP" or self.episode_len == self.max_episode_len
         ):  
-            
+            # NOTE(cgp): 最後に従来手法と比較して報酬を設定
             reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-new_gates)/self.max_compression
             
             # RL vs PyZX Simplication -> BO, BO, Initial
@@ -898,10 +898,23 @@ class ZXEnv(ZXEnvBase):
         # circuit generation
         while not valid_circuit:
             # print('env.reset', random.random())
+            def get_nx_graph(g):
+                nodelist = []
+                for v in g.vertices():
+                    nodelist.append([v, {'phase':g.phases()[v]}])
+                edgelist = []
+                for v1, v2 in g.edges():
+                    edgelist.append([v1, v2, {'edge_type': g.graph[v1][v2]}])
+                G = nx.Graph()
+                G.add_nodes_from(nodelist)
+                G.add_edges_from(edgelist)
+                return G
+
 
             g = zx.generate.cliffordT(
                self.qubits, self.depth, p_t=0.17, p_s=0.24, p_hsh=0.25, 
             )
+            # print(nx.weisfeiler_lehman_graph_hash(get_nx_graph(g)))
             c = zx.Circuit.from_graph(g)
             self.no_opt_stats = self.get_data(c.to_basic_gates())
             self.initial_depth = c.to_basic_gates().depth()

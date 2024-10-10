@@ -1,13 +1,23 @@
 import os
 import argparse
 import time
+import random
 from distutils.util import strtobool
 from socket import gethostname
 
+import numpy as np
 import torch
 import gym
 
 from src.util import rootdir
+
+# NOTE(cgp): pip install pydevdしない限り正しく動く
+try:
+    import pydevd
+    DEBUGGING = True
+except ImportError:
+    DEBUGGING = False
+
 
 def parse_args():
     # fmt: off
@@ -43,6 +53,7 @@ def parse_args():
     parser.add_argument("--use-async", type=bool, default=False, help="use parallel?")
     parser.add_argument("--num-process", type=int, default=8,
         help="the number of multiprocesses") #default 8
+    
     parser.add_argument("--num-envs", type=int, default=1,
         help="the number of parallel game environments") #default 8
     parser.add_argument("--num-steps", type=int, default=2048,
@@ -74,9 +85,16 @@ def parse_args():
     parser.add_argument("--target-kl", type=float, default=None,
         help="the target KL divergence threshold")
     args = parser.parse_args()
+
+    if DEBUGGING:
+        args.cuda = False
+        args.num_steps = 100
+
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     # fmt: on
+
+
     return args
 
 
@@ -91,12 +109,31 @@ os.environ["TORCH_USE_CUDA_DSA"] = "1"
 def make_env(gym_id, seed, idx, capture_video, run_name, qubits, depth, gate_type):
     def thunk():
         env = gym.make(gym_id, qubits=qubits, depth=depth, gate_type=gate_type)
+        # NOTE(cgp):
+        # https://sourcegraph.com/search?q=repo:%5Egithub%5C.com/Farama-Foundation/Gymnasium%24%40v0.29.1+%22%5C%22r%5C%22%22&patternType=keyword&sm=0
+        # This wrapper will keep track of cumulative rewards and episode lengths.
+        #     For a vectorized environments the output will be in the form of::
+
+        # >>> infos = {
+        # ...     "final_observation": "<array of length num-envs>",
+        # ...     "_final_observation": "<boolean array of length num-envs>",
+        # ...     "final_info": "<array of length num-envs>",
+        # ...     "_final_info": "<boolean array of length num-envs>",
+        # ...     "episode": {
+        # ...         "r": "<array of cumulative reward>",
+        # ...         "l": "<array of episode length>",
+        # ...         "t": "<array of elapsed time since beginning of episode>"
+        # ...     },
+        # ...     "_episode": "<boolean array of length num-envs>"
+        # ... }
+
         env = gym.wrappers.RecordEpisodeStatistics(env)
         if capture_video and idx == 0:
             env = gym.wrappers.RecordVideo(env, rootdir(f"/videos/{run_name}"))
         return env
 
     return thunk
+
 gym.envs.registration.register(
     id='zx-v0',
     # entry_point=lambda qubit, depth: ZXEnv(qubit, depth),
@@ -110,6 +147,18 @@ if __name__ == "__main__":
     from src.util import CustomizedAsyncVectorEnv, CustomizedSyncVectorEnv
 
     args = parse_args()
+
+    # random settings        
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = args.torch_deterministic
+    torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     #Training size
     qubits = 5

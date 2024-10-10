@@ -1,6 +1,7 @@
 import random
 import time
 from socket import gethostname
+import shutil
 
 import numpy as np
 import gym
@@ -12,7 +13,7 @@ from distutils.util import strtobool
 from torch_geometric.data import Batch, Data
 
 
-from src.util import Logger, Timer, rootdir
+from src.util import Logger, Timer, rootdir, count_autograd_graph
 from src.training_method.trajectory import Trajectory
 
 class PPO():
@@ -36,14 +37,10 @@ class PPO():
         self.run_name = run_name
         self.logger = Logger(run_name, args)
 
-        # random settings        
-        random.seed(self.args.seed)
-        np.random.seed(self.args.seed)
-        torch.manual_seed(self.args.seed)
-        torch.backends.cudnn.deterministic = self.args.torch_deterministic
         # print(random.random())
         self.envs = envs
         self.agent = agent
+        print(self.agent.state_dict())
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5)
         
         self.traj = Trajectory(self.envs, self.agent, logger=self.logger, device=self.device)
@@ -51,7 +48,12 @@ class PPO():
         num_updates = self.args.total_timesteps // self.args.batch_size
 
         self.init_logger_data()
-
+    
+    def __del__(self):
+        if self.traj.global_step < 8000:
+            # remove directory
+            shutil.rmtree(rootdir(f"/runs/{self.run_name}"))
+    
     def init_logger_data(self):
         self.logger.data['cumulative_reward'] = []
         self.logger.data['cumulative_episode_length'] = []
@@ -72,6 +74,8 @@ class PPO():
         self.timer = Timer()
         self.start_time = time.time()
 
+        print(f"Run start: {self.run_name}")
+
         NUM_UPDATES = 2048
         for update in range(NUM_UPDATES):
             if update % 10 == 1:
@@ -88,7 +92,22 @@ class PPO():
             
             self.traj.collect(self.args.num_steps)
             self.traj.calculate_advantages(self.args.gamma, self.args.gae, self.args.gae_lambda)
+            # old_params = [param.clone() for param in self.agent.parameters()]
+
             self.update_networks()
+
+            # new_params = [param.clone() for param in self.agent.parameters()]
+            # diff_params = []
+            # for o, n in zip(old_params, new_params):
+            #     diff_params.append((o - n))
+            # print("[", end="")
+            # for i, d in enumerate(diff_params):
+            #     print(f"[{d.mean()}, {d.std()}], ", end="")
+            # print("]")
+
+            # exit(0)
+
+
             self.write_other_logs()
             print(
                 'rl_gates: ',
@@ -177,6 +196,7 @@ class PPO():
                 nn.utils.clip_grad_norm_(self.agent.parameters(), self.args.max_grad_norm)
                 self.optimizer.step()
 
+
             if self.args.target_kl is not None:
                 if approx_kl > self.args.target_kl:
                     break
@@ -235,13 +255,16 @@ class PPO():
         self.logger.write_mean('charts/swap_gates', 'swap_gates', self.traj.global_step)
         self.logger.write_mean('charts/pyzx_swap_gates', 'pyzx_swap_gates', self.traj.global_step)
 
-        total_weights = 0
-        total_elements = 0
+        policy_weights = []
+        value_weights = []
         for param in self.agent.actor_gnn.parameters():
-            total_weights += param.sum()
-            total_elements += param.numel()
-        weights_mean = total_weights / total_elements
-        self.logger.writer.add_scalar('charts/actor_weights_mean', weights_mean, self.traj.global_step)
+            policy_weights.extend(param.cpu().detach().numpy().flatten())
+        for param in self.agent.critic_gnn.parameters():
+            value_weights.extend(param.cpu().detach().numpy().flatten())
+        self.logger.writer.add_scalar('weights/policy_weights_mean', np.mean(policy_weights), self.traj.global_step)
+        self.logger.writer.add_scalar('weights/policy_weights_std', np.std(policy_weights), self.traj.global_step)
+        self.logger.writer.add_scalar('weights/value_weights_mean', np.mean(value_weights), self.traj.global_step)
+        self.logger.writer.add_scalar('weights/value_weights_std', np.std(value_weights), self.traj.global_step)
         
         total_weights = 0
         total_elements = 0

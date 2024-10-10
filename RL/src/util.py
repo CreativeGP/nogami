@@ -1,12 +1,12 @@
 import time
 from socket import gethostname
+import sys
 
 import numpy as np
 import gym
 
 # NOTE(cgp): /は含まないディレクトリパスを返すので注意
 def rootdir(s):
-    import sys
     root = '/'.join(__file__.split('/')[:-2])
     # if not root.endswith('/'):
     #     root += '/'
@@ -14,6 +14,7 @@ def rootdir(s):
         root = root[:-1]
     return root+s
 
+# a.grad_fn
 def show_autograd_graph(grad_fn, indent=0):
     print((' '*indent) + grad_fn.__class__.__name__)
     if indent >= 10:
