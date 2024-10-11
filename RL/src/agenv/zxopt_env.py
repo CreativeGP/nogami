@@ -147,7 +147,12 @@ class ZXEnvBase(gym.Env):
             circuit_data = self.get_data(circ)
             new_gates = circuit_data[self.gate_type]
         except:
-            new_gates = np.inf
+            # NOTE(cgp): ここがnanバグの温床でした。回路が復元できないような操作はSTOPになるんだけど、
+            # それにたいしてペナルティを設定したかったのかわからんけど、infだとアドバンテージの計算でnanになる
+            # そして、勾配計算もnanになる.
+            # なんでdev=cpuで発生するのかはわからんけど... 別にdev=cudaでもここを通れば発生すると思うんだけど
+            # new_gates = np.inf
+            new_gates = 100
             act_type = "STOP"
         
         self.action_pattern.append([act_type, new_gates-self.current_gates])

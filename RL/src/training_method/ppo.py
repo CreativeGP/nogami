@@ -45,13 +45,17 @@ class PPO():
         
         self.traj = Trajectory(self.envs, self.agent, logger=self.logger, device=self.device)
         self.traj.reset()
+        if args.checkpoint != "":
+            self.traj.global_step = args.global_step
         num_updates = self.args.total_timesteps // self.args.batch_size
 
         self.init_logger_data()
     
     def __del__(self):
+        print(self.run_name)
         if self.traj.global_step < 8000:
             # remove directory
+            print(f"Global steps {self.traj.global_step} is less than 8000. Removing directory...")
             shutil.rmtree(rootdir(f"/runs/{self.run_name}"))
     
     def init_logger_data(self):

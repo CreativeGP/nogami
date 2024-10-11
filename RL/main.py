@@ -28,18 +28,16 @@ def parse_args():
         help="the name of this experiment")
     parser.add_argument("--gym-id", type=str, default="zx-v0",
         help="the id of the gym environment")
-    parser.add_argument("--learning-rate", type=float, default=2e-4,
-        help="the learning rate of the optimizer")
+    parser.add_argument("--checkpoint", type=str, default="",
+        help="the path to the checkpoint file for additional training")
+    parser.add_argument("--global-step", type=int, 
+        help="the number of steps that the thc agent has already taken (required for additional training)")
     parser.add_argument("--seed", type=int, default=8983440,
         help="seed of the experiment")
-    parser.add_argument("--total-timesteps", type=int, default=10000000,
-        help="total timesteps of the experiments")
     parser.add_argument("--torch-deterministic", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="if toggled, `torch.backends.cudnn.deterministic=False`")
     parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="if toggled, cuda will be enabled by default")
-    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
-        help="if toggled, this experiment will be tracked with Weights and Biases")
     
     # NOTE(cgp): wandbを使っているコードは少なくとも公開されていない
     parser.add_argument("--wandb-project-name", type=str, default="ppo-implementation-details",
@@ -48,12 +46,18 @@ def parse_args():
         help="the entity (team) of wandb's project")
     parser.add_argument("--capture-video", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="weather to capture videos of the agent performances (check out `videos` folder)")
+    parser.add_argument("--track", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+        help="if toggled, this experiment will be tracked with Weights and Biases")
 
     # Algorithm specific arguments
     parser.add_argument("--use-async", type=bool, default=False, help="use parallel?")
     parser.add_argument("--num-process", type=int, default=8,
         help="the number of multiprocesses") #default 8
     
+    parser.add_argument("--learning-rate", type=float, default=2e-4,
+        help="the learning rate of the optimizer")
+    parser.add_argument("--total-timesteps", type=int, default=10000000,
+        help="total timesteps of the experiments")
     parser.add_argument("--num-envs", type=int, default=1,
         help="the number of parallel game environments") #default 8
     parser.add_argument("--num-steps", type=int, default=2048,
@@ -88,7 +92,12 @@ def parse_args():
 
     if DEBUGGING:
         args.cuda = False
-        args.num_steps = 100
+        args.ent_coef = 0.01
+        args.global_step = 22528
+        args.learning_rate = 1.9883e-4
+        args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__cgp__8983440__1728573100_22528_model5x70_gates_new.pt"
+        # args.num_envs = 4
+        # args.num_epochs = 512
 
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
@@ -175,6 +184,10 @@ if __name__ == "__main__":
         )
 
     agent = AgentGNN(envs, device).to(device)
+    if args.checkpoint != "":
+        agent.load_state_dict(
+            torch.load(args.checkpoint, map_location=torch.device("cpu"))
+        )
 
     ppo = PPO(envs, agent, args, run_name)
 
