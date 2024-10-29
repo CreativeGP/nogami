@@ -88,14 +88,21 @@ def parse_args():
         help="the maximum norm for the gradient clipping")
     parser.add_argument("--target-kl", type=float, default=None,
         help="the target KL divergence threshold")
+
+    # args and dept
+    parser.add_argument("--qubits", type=int, default=5, help="training qubits")
+    parser.add_argument("--depth", type=int, default=60, help="training depth(=gates)")
+
     args = parser.parse_args()
 
     if DEBUGGING:
-        args.cuda = False
         args.ent_coef = 0.01
-        args.global_step = 22528
+        args.global_step = 413696
         args.learning_rate = 1.9883e-4
-        args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__cgp__8983440__1728573100_22528_model5x70_gates_new.pt"
+        # args.cuda = False
+        args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
+        args.cuda = False
+        # args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
         # args.num_envs = 4
         # args.num_epochs = 512
 
@@ -170,8 +177,8 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     #Training size
-    qubits = 5
-    depth = 55
+    qubits = args.qubits
+    depth = args.depth
     run_name = f"{args.gym_id}__{args.exp_name}__{gethostname()}__{args.seed}__{int(time.time())}"
     if args.use_async:
         envs = CustomizedAsyncVectorEnv(

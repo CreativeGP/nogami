@@ -134,6 +134,8 @@ class PPO():
         torch.save(self.agent.state_dict(), "state_dict_model5x70_twoqubits_new.pt")
 
     def update_networks(self):
+        print(np.count_nonzero(self.traj.rewards.cpu().numpy() < -0.1))
+
         # Optimizing the policy and value network
         b_inds = np.arange(self.args.batch_size)  
         clipfracs = []
@@ -188,6 +190,10 @@ class PPO():
                     v_loss = 0.5 * v_loss_max.mean()
                 else:
                     v_loss = 0.5 * ((newvalue - self.traj.b_returns[mb_inds]) ** 2).mean()
+                
+                # spike detection
+                if v_loss > 0.01:
+                    pass
 
                 entropy_loss = entropy.mean()
                 loss = pg_loss - self.ent_coef * entropy_loss + v_loss * self.args.vf_coef
@@ -213,6 +219,9 @@ class PPO():
         y_pred, y_true = self.traj.b_values.cpu().numpy(), self.traj.b_returns.cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        vtarget_variance =  np.var(y_true - y_pred)
+        self.logger.writer.add_scalar("losses/vtarget_variance", vtarget_variance, self.traj.global_step)
+
         
         self.logger.writer.add_scalar("charts/learning_rate", self.optimizer.param_groups[0]["lr"], self.traj.global_step)
         self.logger.writer.add_scalar("losses/value_loss", v_loss.item(), self.traj.global_step)
@@ -279,6 +288,10 @@ class PPO():
         self.logger.writer.add_scalar('charts/critic_weights_mean', weights_mean, self.traj.global_step)
 
         self.logger.write_histogram('histograms/reward_distribution', 'cumulative_reward', self.traj.global_step)
+        self.logger.writer.add_histogram('histograms/step_reward_distribution', np.array(self.traj.b_rewards.cpu()), self.traj.global_step)
+        self.logger.writer.add_histogram('histograms/step_return_distribution', np.array(self.traj.b_returns.cpu()), self.traj.global_step)
+        self.logger.writer.add_histogram('histograms/step_value_distribution', np.array(self.traj.b_values.cpu()), self.traj.global_step)
+        self.logger.writer.add_histogram('histograms/estimate_advantage_distribution', np.array(self.traj.b_advantages.cpu()), self.traj.global_step)
         self.logger.write_histogram('histograms/episode_length_distribution', 'cumulative_episode_length', self.traj.global_step)
         self.logger.write_histogram('histograms/action_counter_distribution', 'action_counter', self.traj.global_step)
         self.logger.write_histogram('histograms/action_nodes_distribution', 'action_nodes', self.traj.global_step)

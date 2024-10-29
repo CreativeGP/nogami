@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import json
+import random
 from distutils.util import strtobool
 
 import pandas as pd
@@ -37,7 +38,7 @@ if __name__ == "__main__":
     # arguments
     if args.grading_data.endswith("/"):
         args.grading_data = args.grading_data[:-1]
-
+    
     print("Grade for model: ", args.grading_data)
     print("Gate type: ", args.gate_type)
     print()
@@ -66,14 +67,18 @@ if __name__ == "__main__":
                 wins = []
                 for rl, pyzx in zip(rl_stats[args.gate_type], pyzx_stats[args.gate_type]):
                     wins.append(1 if rl < pyzx else -1)
+                
+                n = 0
                 if args.n == -1:
-                    args.n = len(reduction)
+                    n = len(reduction)
                 else:
-                    reduction = np.random.choice(reduction, args.n)
+                    n = args.n
+                    reduction = random.sample(list(reduction), args.n)
+                    wins = random.sample(list(wins), args.n)
 
                 if args.use_space:
-                    print(f"{qubit} {depth} {np.mean(reduction):.3f} {np.std(reduction):.3f} {np.mean(wins):.3f} {np.std(wins):.3f} {args.n}")
+                    print(f"{qubit} {depth} {np.mean(reduction):.3f} {np.std(reduction):.3f} {np.mean(wins):.3f} {np.std(wins):.3f} {n}")
                 else:
-                    print(f"{qubit}\t{depth}\t{np.mean(reduction):.3f}\t{np.std(reduction):.3f}\t{np.mean(wins):.3f}\t{np.std(wins):.3f}\t{args.n}")
+                    print(f"{qubit}\t{depth}\t{np.mean(reduction):.3f}\t{np.std(reduction):.3f}\t{np.mean(wins):.3f}\t{np.std(wins):.3f}\t{n}")
             except Exception as e:
                 pass

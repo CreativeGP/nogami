@@ -45,7 +45,9 @@ class ZXEnvBase(gym.Env):
         self.max_episode_len = 75
         self.cumulative_reward_episodes = 0
         self.win_episodes = 0
-        self.max_compression = 55
+        # NOTE(cgp): なんで55になってるんだろう
+        self.max_compression = 20
+        # self.max_compression = 55
 
         # Unused variables but required for gym
         self.action_space = Discrete(1)
@@ -146,13 +148,13 @@ class ZXEnvBase(gym.Env):
             circ = zx.basic_optimization(circuit).to_basic_gates()
             circuit_data = self.get_data(circ)
             new_gates = circuit_data[self.gate_type]
-        except:
+        except Exception as e:
             # NOTE(cgp): ここがnanバグの温床でした。回路が復元できないような操作はSTOPになるんだけど、
             # それにたいしてペナルティを設定したかったのかわからんけど、infだとアドバンテージの計算でnanになる
             # そして、勾配計算もnanになる.
             # なんでdev=cpuで発生するのかはわからんけど... 別にdev=cudaでもここを通れば発生すると思うんだけど
             # new_gates = np.inf
-            new_gates = 100
+            new_gates = self.current_gates
             act_type = "STOP"
         
         self.action_pattern.append([act_type, new_gates-self.current_gates])

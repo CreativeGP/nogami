@@ -85,6 +85,7 @@ class Trajectory():
                             self.logger.data['pyzx_swap_gates'].append(item["pyzx_swap_cost"])
                             self.logger.data['wins_vs_pyzx'].append(item["win_vs_pyzx"])
         self.b_logprobs = self.logprobs.reshape(-1)
+        self.b_rewards = self.rewards.reshape(-1)
         self.b_actions = self.actions.reshape((-1,) + self.envs.single_action_space.shape)
         self.b_values = self.values.reshape(-1)
     
