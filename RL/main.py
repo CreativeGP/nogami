@@ -98,10 +98,13 @@ def parse_args():
     if DEBUGGING:
         args.ent_coef = 0.01
         args.global_step = 413696
-        args.learning_rate = 1.9883e-4
+        args.learning_rate = 0
         # args.cuda = False
-        args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
+        args.checkpoint = "C:\\Users\\malic\\Develop\\RLManager\\vendor\\nogami\\RL\\checkpoints\\state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
         args.cuda = False
+        # args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
+        # args.cuda = False
+
         # args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
         # args.num_envs = 4
         # args.num_epochs = 512

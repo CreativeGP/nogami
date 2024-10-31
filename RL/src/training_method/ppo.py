@@ -220,7 +220,13 @@ class PPO():
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
         vtarget_variance =  np.var(y_true - y_pred)
+        var_val = np.var(y_pred)
+        var_ret = np.var(y_true)
+        cov_pred_true = np.cov(y_pred, y_true)[0,1]
         self.logger.writer.add_scalar("losses/vtarget_variance", vtarget_variance, self.traj.global_step)
+        self.logger.writer.add_scalar("losses/var_values", var_ret, self.traj.global_step)
+        self.logger.writer.add_scalar("losses/var_returns", var_val, self.traj.global_step)
+        self.logger.writer.add_scalar("losses/cov_val_ret", cov_pred_true, self.traj.global_step)
 
         
         self.logger.writer.add_scalar("charts/learning_rate", self.optimizer.param_groups[0]["lr"], self.traj.global_step)

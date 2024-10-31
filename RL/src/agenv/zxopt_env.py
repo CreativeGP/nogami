@@ -929,15 +929,15 @@ class ZXEnv(ZXEnvBase):
             self.initial_stats = self.get_data(self.rand_circuit)
             self.graph = self.rand_circuit.to_graph()
             
-            signal.signal(signal.SIGALRM, handler)
-            signal.alarm(10)
+            # signal.signal(signal.SIGALRM, handler)
+            # signal.alarm(10)
             try:
                 zx.simplify.teleport_reduce(self.graph)
             except: 
                 print('Teleport reduce error')
                 continue
             
-            signal.alarm(0)
+            # signal.alarm(0)
             
             basic_circ = zx.optimize.basic_optimization(zx.Circuit.from_graph(self.graph.copy()).split_phase_gates())
             self.basic_opt_data = self.get_data(basic_circ.to_basic_gates())
@@ -1008,15 +1008,15 @@ class ZXEnvForTest(ZXEnvBase):
             self.initial_stats = self.get_data(self.rand_circuit)
             self.graph = self.rand_circuit.to_graph()
             
-            signal.signal(signal.SIGALRM, handler)
-            signal.alarm(10)
+            # signal.signal(signal.SIGALRM, handler)
+            # signal.alarm(10)
             try:
                 zx.simplify.teleport_reduce(self.graph)
             except: 
                 print('Teleport reduce error')
                 continue
             
-            signal.alarm(0)
+            # signal.alarm(0)
             
             basic_circ = zx.optimize.basic_optimization(zx.Circuit.from_graph(self.graph.copy()).split_phase_gates())
             self.basic_opt_data = self.get_data(basic_circ.to_basic_gates())
