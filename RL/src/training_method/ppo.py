@@ -224,8 +224,8 @@ class PPO():
         var_ret = np.var(y_true)
         cov_pred_true = np.cov(y_pred, y_true)[0,1]
         self.logger.writer.add_scalar("losses/vtarget_variance", vtarget_variance, self.traj.global_step)
-        self.logger.writer.add_scalar("losses/var_values", var_ret, self.traj.global_step)
-        self.logger.writer.add_scalar("losses/var_returns", var_val, self.traj.global_step)
+        self.logger.writer.add_scalar("losses/var_values", var_val, self.traj.global_step)
+        self.logger.writer.add_scalar("losses/var_returns", var_ret, self.traj.global_step)
         self.logger.writer.add_scalar("losses/cov_val_ret", cov_pred_true, self.traj.global_step)
 
         

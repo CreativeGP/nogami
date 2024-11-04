@@ -100,7 +100,7 @@ def parse_args():
         args.global_step = 413696
         args.learning_rate = 0
         # args.cuda = False
-        args.checkpoint = "C:\\Users\\malic\\Develop\\RLManager\\vendor\\nogami\\RL\\checkpoints\\state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
+        args.checkpoint = "C:\\Users\\malic\\Develop\\RLManager\\vendor\\nogami\\RL\\checkpoints\\riu_pretrained_gates.pt"
         args.cuda = False
         # args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
         # args.cuda = False
