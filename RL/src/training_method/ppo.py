@@ -40,7 +40,7 @@ class PPO():
         # print(random.random())
         self.envs = envs
         self.agent = agent
-        print(self.agent.state_dict())
+        # print(self.agent.state_dict())
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.args.learning_rate, eps=1e-5)
         
         self.traj = Trajectory(self.envs, self.agent, logger=self.logger, device=self.device)
