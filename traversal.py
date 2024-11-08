@@ -17,6 +17,8 @@ import torch
 import rl_agent
 import zx_env
 
+args = None
+
 def riu_preprocess(g):
     circ = zx.Circuit.from_graph(g)
     circ = circ.split_phase_gates()
@@ -651,6 +653,169 @@ class RiuOptimizer1(TraversalOptimizer):
     def pivot_heuristics(self, _g, u, v):
         pass
 
+sys.path.append("./RL/")
+sys.path.append("./zx/RL/")
+import gymnasium as gym
+from RL.src.training_method.ppo import PPO
+from RL.src.agenv.zxopt_agent import AgentGNN
+from RL.src.util import CustomizedAsyncVectorEnv, CustomizedSyncVectorEnv
+
+# 強化学習エージェントの出力を参考に探索する
+class RLOptimizer(TraversalOptimizer):
+
+    def __init__(self, circ):
+        super().__init__(circ)
+        self.device = torch.device("cuda")
+        def make_env(gym_id, seed, idx, capture_video, run_name, gate_type, g):
+            def thunk():
+                env = gym.make(gym_id, gate_type = gate_type, g = g)
+                env = gym.wrappers.RecordEpisodeStatistics(env)
+                if capture_video and idx == 0:
+                    env = gym.wrappers.RecordVideo(env, rootdir(f"/videos/{run_name}"))
+                # env.seed(seed)
+                env.action_space.seed(seed)
+                env.observation_space.seed(seed)
+                return env
+
+            return thunk
+        self.agent = AgentGNN(None, self.device).to(self.device)
+        self.agent.load_state_dict(
+            torch.load("/home/wsl/Research/nogami/zx/state_dict_model5x60_new.pt", map_location=torch.device("cpu"))
+        )
+        self.agent.eval()
+
+                #  Action: id, pivot, pivot_boudary, pivot_gadget, lcomp, gadget fusion
+
+    def run(self):
+        min_depth = 10000
+        self.min_score = 10000
+        self.min_g = None
+        min_history = ""
+        self.score_histories = []
+
+        self.rl_ctx = zx_env.RLContext()
+
+        database = []
+        initial_score= self.score(self.g)
+        queue = [(self.g,0,"",[initial_score])]
+        count = 0
+        ids_hist = Histogram("ids")
+        lcomps_hist = Histogram("lcomps")
+        pivots_hist = Histogram("pivots")
+        depthwise_hist = {}
+        gates_hist = Histogram("gates")
+        visited = dict()
+        timer = Timer(silent=False)
+
+
+        while len(queue) != 0:
+            timer.cut("loop begin", silent=False)
+            g1, depth, history, score_history = queue.pop(0)
+            current_score = score_history[-1]
+            count += 1
+
+            print(current_score, history)
+
+            #print( self.check_identity(g1), history,)
+
+            # if not self.check_identity(g1):
+            #     print("Identity check: ", self.check_identity(g1), history)
+
+            # if not depth in depthwise_hist:
+            #     depthwise_hist[depth] = Histogram("depth " + str(depth))
+            #     depthwise_hist[depth].add(current_score)
+            # else:
+            #     depthwise_hist[depth].add(current_score)
+
+            # graph_hash = nx.weisfeiler_lehman_graph_hash(self.get_nx_graph(g1))
+            # if graph_hash in visited:
+            #     self.score_histories.append(score_history)
+            #     database.append(g1)
+            #     continue
+            # else:
+            #     # zx.draw_matplotlib(g1,labels=True,h_edge_draw='box').savefig("current.png")
+            #     visited[graph_hash] = g1
+            before = g1.num_vertices()
+                
+            branch = 0
+            self.rl_ctx.update_state(g1)
+            info = self.rl_ctx.get_info(g1)
+            policy_feat = self.agent.get_policy_feature_graph(g1, info)
+            logits = self.agent.actor(policy_feat).flatten()
+            mask = policy_feat.y != -1
+            logits = logits[mask]
+            actions = policy_feat.y[mask]
+            logit_action = zip(logits, actions)
+            logit_action = sorted(logit_action, key=lambda x: x[0], reverse=True)
+            actions = [x[1] for x in logit_action if x[0] > -10]
+            # actions = [x[1] for x in logit_action]
+
+            # drop random any% actions
+            # actions = [act for act in actions if dice(0.2)]
+            print("Traverse actions: ", len(actions))
+            time_lambda(self, "Scoreing time", lambda: self.score(self.g))
+
+            for act in actions:
+                timer.cut("action loop", silent=True)
+                branch += 1
+                count += 1
+                g2 = deepcopy(g1)
+                g2, act_str = self.rl_ctx.step(g2, act)
+                after = g2.num_vertices()
+                #print(act_str, after-before)
+                # if act_str == "ID":
+                #     continue
+                if act_str == "STOP":
+                    continue
+                timer.cut("action loop 2", silent=True)
+                new_score = self.score(g2)
+                timer.cut("action loop 3", silent=True)
+                # if self.should_explore(depth, new_score, current_score):
+                queue.append((g2,depth+1,history + f" {act_str}({new_score - current_score})", score_history + [new_score]))
+                if new_score < self.min_score:
+                    self.min_score = new_score
+                    min_history = history + f" {act_str}({new_score - current_score})"
+                    # print("*", self.min_score, self.min_score-initial_score, min_history)
+                    self.min_g = g2
+
+            if branch == 0:
+                self.score_histories.append(score_history)
+                database.append(g1)
+
+
+            timer.cut("action loop end", silent=True)
+      # databases = []
+        # try:
+        #     left = pickle.load(open("database.pkl", "rb"))
+        #     databases.extend(left)
+        # except Exception as e:
+        #     print(e)
+        # databases.append(database)
+        # pickle.dump(databases, open("database.pkl", "wb"))
+        
+        print("Min score: ", self.min_score-initial_score)
+        print("Min history: ", min_history)
+        print("Traversal count: ", count)
+
+    def should_explore(self, depth, new_score, current_score):
+        return new_score < current_score
+    
+    # less is better
+    def score(self, _g):
+        # circuit = zx.extract.extract_clifford_normal_form(_g.copy()).to_basic_gates()
+        circuit = zx.extract.extract_circuit(_g.copy()).to_basic_gates()
+        circuit = zx.basic_optimization(circuit).to_basic_gates()
+        return len(circuit.gates)
+    
+        value_obs = self.rl_ctx.value_obs(_g)
+        return -self.agent.get_value(value_obs).item()
+
+    def lc_heuristics(self, _g, u):
+        pass
+
+    def pivot_heuristics(self, _g, u, v):
+        pass
+
 class RiuOptimizer_WithPolicy(TraversalOptimizer):
     static_initialized = False
     device = torch.device("cuda")
@@ -1054,6 +1219,17 @@ def score_heavy(g):
 
 
 if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='RL optimizer')
+    parser.add_argument('--qasm', type=str, default=None, help='circuit file')
+    parser.add_argument('--cut-logit', type=int, default=None, help='circuit file')
+    args = parser.parse_args()
+
+    g_circ = zx.Circuit.load(args.qasm).to_basic_gates().to_graph()
+    opt1 = RLOptimizer(g_circ)
+    opt1.run()
+
 
     program = """
     FullSearch
@@ -1074,7 +1250,7 @@ if __name__ == '__main__':
     }
     for i in range(100):
         # random.seed(i)
-        g_circ = zx.generate.cliffordT(10,50)
+        g_circ = zx.generate.cliffordT(40,500)
         original_tensor = g_circ.to_tensor()
 
         # calculate crude gates
@@ -1086,7 +1262,8 @@ if __name__ == '__main__':
 
 
         # divide_circuit(g_circ, 10)
-        opt1 = RiuOptimizer_WithPolicy(g_circ, program2)
+        opt1 = RLOptimizer(g_circ)
+        # opt1 = RiuOptimizer_WithPolicy(g_circ, program2)
         opt1.run()
 
         circuit = zx.extract.extract_circuit(opt1.min_g.copy()).to_basic_gates()

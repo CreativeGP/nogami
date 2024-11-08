@@ -1037,3 +1037,13 @@ class RLContext():
                 continue
             m.append(v)
         return m
+
+    def get_info(self, graph):
+        return {
+            "graph_obs": graph,
+            # "full_reduce_time": full_reduce_end-full_reduce_start,
+            "piv_nodes": self.pivot_info_dict,
+            "lcomp_nodes": self.match_lcomp(graph),
+            "iden_nodes": self.match_ids(graph),
+            "gf_nodes": self.gadget_info_dict,
+        }

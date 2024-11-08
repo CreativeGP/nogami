@@ -31,7 +31,7 @@ class ZXEnvBase(gym.Env):
     def __init__(self):
         # self.device = "cuda"
         self.clifford = False
-        self.shape = 3000        
+        self.shape = 3000
         # d["qubits"] = circuit.qubits
         # d["gates"] = total
         # d["tcount"] = tcount
@@ -61,12 +61,12 @@ class ZXEnvBase(gym.Env):
 
     def step(self, action):
 
-        if int(action) == int(self.shape * (self.shape + 1) + 1):
+        if int(action) == int(self.shape) * (int(self.shape) + 1) + 1:
             act_type = "STOP"
-        elif int(action) > int(self.shape**2):
+        elif int(action) > int(self.shape)**2:
             act_type = "ID"
             self.episode_stats["id"] +=1
-            act_node1 = int(action) - int(self.shape**2)
+            act_node1 = int(action) - int(self.shape)**2
         elif int(action) < 0:
             act_type = "GF"
             self.episode_stats["gf"] += 1 
@@ -1000,7 +1000,6 @@ class ZXEnvForTest(ZXEnvBase):
         
         # circuit generation
         while not valid_circuit:
-            
             c = zx.Circuit.from_graph(self.g)
             self.no_opt_stats = self.get_data(c.to_basic_gates())
             self.initial_depth = c.to_basic_gates().depth()
@@ -1026,8 +1025,9 @@ class ZXEnvForTest(ZXEnvBase):
             
             self.pivot_info_dict = self.match_pivot_parallel() | self.match_pivot_boundary() | self.match_pivot_gadget()
             self.gadget_info_dict, self.gadgets = self.match_phase_gadgets()
+            match_lcomp = self.match_lcomp()
             self.gadget_fusion_ids = list(self.gadget_info_dict)
-            actions_available = len(self.match_lcomp()) + len(self.pivot_info_dict.keys()) + len(self.match_ids())
+            actions_available = len(match_lcomp) + len(self.pivot_info_dict.keys()) + len(self.match_ids())
             if actions_available == 0:
                 print("Generating new circuit")
                 raise Exception("No actions available")
@@ -1048,5 +1048,12 @@ class ZXEnvForTest(ZXEnvBase):
             self.final_circuit = circuit
             self.min_gates = circuit_data[self.gate_type]
 
-        return self.graph, {"graph_obs": self.graph, "full_reduce_time": full_reduce_end-full_reduce_start}
+        return self.graph, {
+            "graph_obs": self.graph,
+            "full_reduce_time": full_reduce_end-full_reduce_start,
+            "piv_nodes": self.pivot_info_dict,
+            "lcomp_nodes": match_lcomp,
+            "iden_nodes": self.match_ids(),
+            "gf_nodes": self.gadget_info_dict,
+        }
 

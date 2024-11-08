@@ -96,12 +96,13 @@ def parse_args():
     args = parser.parse_args()
 
     if DEBUGGING:
-        args.ent_coef = 0.01
-        args.global_step = 413696
-        args.learning_rate = 0
+        args.cuda  = True
+        # args.ent_coef = 0.01
+        # args.global_step = 413696
+        # args.learning_rate = 0
+        # # args.cuda = False
+        # args.checkpoint = "C:\\Users\\malic\\Develop\\RLManager\\vendor\\nogami\\RL\\checkpoints\\riu_pretrained_gates.pt"
         # args.cuda = False
-        args.checkpoint = "C:\\Users\\malic\\Develop\\RLManager\\vendor\\nogami\\RL\\checkpoints\\riu_pretrained_gates.pt"
-        args.cuda = False
         # args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
         # args.cuda = False
 
@@ -172,10 +173,13 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
+    # torch.backends.cudnn.deterministic = True
     torch.cuda.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
-    torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+    print("CPU Random State:",torch.get_rng_state())
+    print("GPU Random State:",torch.cuda.get_rng_state(device='cuda'))
 
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")

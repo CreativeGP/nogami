@@ -16,20 +16,21 @@ from memory_profiler import profile
 # torch.distributions.categoricalを継承して、
 class CategoricalMasked(Categorical):
     def __init__(self, probs=None, logits=None, validate_args=None, masks=None, device="cpu"):
+        self.device = device
         if masks is None:
             masks = []
         self.masks = masks
         if len(self.masks) != 0:
-            self.masks = masks.type(torch.BoolTensor).to(device)
+            self.masks = masks.type(torch.BoolTensor).to(self.device)
             # torch.where(condition, true, false)
-            logits = torch.where(self.masks, logits, torch.tensor(-1e8).to(device))
+            logits = torch.where(self.masks, logits, torch.tensor(-1e8).to(self.device))
         super(CategoricalMasked, self).__init__(probs, logits, validate_args)
 
-    def entropy(self, device):
+    def entropy(self):
         if len(self.masks) == 0:
             return super(CategoricalMasked, self).entropy()
         p_log_p = self.logits * self.probs
-        p_log_p = torch.where(self.masks, p_log_p, torch.tensor(0.0).to(device))
+        p_log_p = torch.where(self.masks, p_log_p, torch.tensor(0.0).to(self.device))
         return -p_log_p.sum(-1)
 
 class Agent(ABC):
@@ -170,6 +171,15 @@ class AgentGNN(nn.Module):
             nn.ReLU(),
             nn.Linear(c_hidden_v, out_features=1),
         )
+
+    def actor(self, x):
+        logits = self.actor_gnn(x.x, x.edge_index, x.edge_attr)
+        return logits
+
+    def critic(self, x):
+        features = self.critic_gnn(x.x, x.edge_index, x.edge_attr)
+        aggregated = self.global_attention_critic(features, x.batch)
+        return self.critic_ff(aggregated)
 
             # zxdiagramから(node_features, edge_index, edge_features、identifier)を作成して、torch.tensorで返す
     # node_features: [位相情報18個, 入力境界？, 出力境界？, フェーズガジェット？, 行動用ノードのための情報...]
@@ -333,6 +343,10 @@ class AgentGNN(nn.Module):
         identifier = torch.tensor(identifier)
 
         # NOTE(cgp): x, yの長さはグラフのノード数によって異なる.
+        # x: ノード特徴量
+        # edge_index: グラフの接続関係を表す
+        # edge_attr: エッジ特徴量
+        # y: action identifier
         return torch_geometric.data.Data(
             x=x.to(self.device),
             edge_index=edge_index.to(self.device),
@@ -405,15 +419,6 @@ class AgentGNN(nn.Module):
         return torch_geometric.data.Data(x=x_value.to(self.device), edge_index=edge_index_value.to(self.device), edge_attr=edge_features.to(self.device))
 
 
-    def actor(self, x):
-        logits = self.actor_gnn(x.x, x.edge_index, x.edge_attr)
-        return logits
-
-    def critic(self, x):
-        features = self.critic_gnn(x.x, x.edge_index, x.edge_attr)
-        aggregated = self.global_attention_critic(features, x.batch)
-        return self.critic_ff(aggregated)
-
     # x: [Batch, Batch]
     # エージェントが次にとりたいと考えている行動を取得する. ついでに付加的な情報も返す. 
     def get_next_action(self, graph, info, action=None, device="cpu", testing=False):
@@ -449,11 +454,13 @@ class AgentGNN(nn.Module):
             action_logits = torch.cat((action_logits, probs.flatten()), 0).reshape(-1)
             
         # Sample from each set of probs using Categorical
-        categoricals = CategoricalMasked(logits=batch_logits, masks=act_mask, device=device)
+        # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
+        categoricals = CategoricalMasked(logits=batch_logits.cpu(), masks=act_mask.cpu(), device='cpu')
 
         # Convert the list of samples back to a tensor
         # actionノードの
         if action is None:
+            # NOTE: 確率処理
             action = categoricals.sample()
             # print(f"action: {action}")
             # exit(0)
@@ -466,8 +473,8 @@ class AgentGNN(nn.Module):
         if testing:
             return action.T, action_id.T
         
-        logprob = categoricals.log_prob(action)
-        entropy = categoricals.entropy(device)
+        logprob = categoricals.log_prob(action.cpu())
+        entropy = categoricals.entropy()
         return action.T, logprob, entropy, torch.tensor(action_logits).to(device).reshape(-1, 1), action_id.T
 
     def get_value(self, graph):
