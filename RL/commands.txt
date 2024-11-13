@@ -1,0 +1,2 @@
+python main.py --exp-name paper --learning-rate 1e-3 --total-timesteps 15000000 --num-envs=8 --anneal-lr True --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9
+python main.py --exp-name paper-cpu --cuda False --learning-rate 1e-3 --total-timesteps 15000000 --num-envs=8 --anneal-lr True --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9

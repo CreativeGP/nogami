@@ -28,7 +28,7 @@ def parse_args():
         help="the name of this experiment")
     parser.add_argument("--gym-id", type=str, default="zx-v0",
         help="the id of the gym environment")
-    parser.add_argument("--checkpoint", type=str, default="",
+    parser.add_argument("--checkpoint", type=str, default=None,
         help="the path to the checkpoint file for additional training")
     parser.add_argument("--global-step", type=int, 
         help="the number of steps that the thc agent has already taken (required for additional training)")
@@ -96,14 +96,15 @@ def parse_args():
     args = parser.parse_args()
 
     if DEBUGGING:
-        args.cuda  = True
+        # args.cuda  = True
         # args.ent_coef = 0.01
         # args.global_step = 413696
         # args.learning_rate = 0
         # # args.cuda = False
         # args.checkpoint = "C:\\Users\\malic\\Develop\\RLManager\\vendor\\nogami\\RL\\checkpoints\\riu_pretrained_gates.pt"
-        # args.cuda = False
+        args.cuda = False
         # args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
+        # args = parser.parse_args("--checkpoint /home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__papaer__win__8983440__1731032894_5738496_model5x70_gates_new.pt --global-step 5738496 --exp-name paper-cpu --cuda False --learning-rate 1e-3 --total-timesteps 15000000 --num-envs=8 --anneal-lr True --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9".split(' '))
         # args.cuda = False
 
         # args.checkpoint = "/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__main__win__8983440__1729778314_413696_model5x70_gates_new.pt"
@@ -198,7 +199,7 @@ if __name__ == "__main__":
         )
 
     agent = AgentGNN(envs, device).to(device)
-    if args.checkpoint != "":
+    if args.checkpoint is not None:
         agent.load_state_dict(
             torch.load(args.checkpoint, map_location=torch.device("cpu"))
         )
