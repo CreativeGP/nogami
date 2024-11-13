@@ -246,6 +246,7 @@ class AgentGNN(nn.Module):
 
         # Create tracking variable of label node to include new action nodes
         current_node = n_nodes
+        # NOTE(cgp): ここのedge_listの順番に決まりがないので、合わせることができない。順番が問題にならないならいいけど.
         edge_list = list(p_graph.edges)
         edge_features = []
         edge_feature_number = 6
@@ -418,6 +419,253 @@ class AgentGNN(nn.Module):
         
         return torch_geometric.data.Data(x=x_value.to(self.device), edge_index=edge_index_value.to(self.device), edge_attr=edge_features.to(self.device))
 
+        # zxdiagramから(node_features, edge_index, edge_features、identifier)を作成して、torch.tensorで返す
+    # node_features: [位相情報18個, 入力境界？, 出力境界？, フェーズガジェット？, 行動用ノードのための情報...]
+    # edge_features: [普通のエッジ、lcomp, ident, pivot, fusion, stop]
+    # identifier: 普通のノードは-1, 他はaction毎に特殊なスカラー
+    def get_policy_feature_graph2(self, graph, info) -> torch_geometric.data.Data:
+        """Enters the graph in format ZX"""
+        piv_nodes = info['piv_nodes']
+        lcomp_nodes = info['lcomp_nodes']
+        iden_nodes = info['iden_nodes']
+        # graph_nx = nx.Graph()
+        v_list = list(graph.vertices())  # vertices list
+        e_list = list(graph.edge_set())  # edges list
+        # NOTE(cgp): なぜ、policy networkのみ辺の反対側も重複させるのか
+        for e1, e2 in e_list.copy():
+            if e1 != e2:
+                e_list.append((e2, e1))
+        e_list = sorted(e_list, key=lambda x: x[0])
+        # create networkx graph
+        # graph_nx.add_nodes_from(v_list)
+        # graph_nx.add_edges_from(e_list)
+
+        identifier = v_list.copy()
+
+        # make the graph directed to duplicate edges
+        # graph_nx = graph_nx.to_directed()
+        # relabel 0->N nodes
+        # mapping = {node: i for i, node in enumerate(graph_nx.nodes)}
+        # identifier = [0 for _ in mapping.items()]
+        # for key in mapping.keys():
+        #     identifier[mapping[key]] = key
+        # p_graph = nx.relabel_nodes(graph_nx, mapping)
+
+        # Features vector list
+
+        neighbors_inputs = []
+        for vertice in list(graph.inputs()):
+            neighbors_inputs.append(list(graph.neighbors(vertice))[0])
+
+        neighbors_outputs = []
+        for vertice in list(graph.outputs()):
+            neighbors_outputs.append(list(graph.neighbors(vertice))[0])
+
+        node_features = []
+        number_node_features = 16
+        for node in sorted(v_list):
+            real_node = identifier[node]
+
+            # Features: One-Hot phase, Frontier In, Frontier 0ut, Gadget, LC Node, PV Node,
+            # STOP Node, ID Node, GadgetF, NOT INCLUDED Extraction Cost
+            node_feature = [0.0 for _ in range(number_node_features)]
+
+            # Frontier Node
+            if real_node in graph.inputs():
+                node_feature[8] = 1.0
+            elif real_node in graph.outputs():
+                node_feature[9] = 1.0
+            else:
+                # One-Hot phase
+                oh_phase_idx = int(graph.phase(real_node) / (0.25))
+                node_feature[oh_phase_idx] = 1.0
+
+                if graph.neighbors(real_node) == 1:  # Phase Gadget
+                    node_feature[10] = 1.0
+
+            # Extraction cost
+            node_features.append(node_feature)
+
+        # Relabel the nodes of the copied graph by adding n_nodes to each label
+        n_nodes = len(graph.vertices())
+
+        # Create tracking variable of label node to include new action nodes
+        current_node = n_nodes
+        edge_list = list(e_list)
+        edge_features = []
+        edge_feature_number = 6
+        for edge in edge_list:
+            # True: 1, False: 0. Features: Graph edge, NOT INCLUDED brings to frontier, NOT INCLUDED is brought by,
+            # Removing Node-LC,Removing Node-PV, Removing Node-ID, Gadget fusion, Between Action
+            node1, node2 = identifier[edge[0]], identifier[edge[1]]
+            edge_feature = [0.0 for _ in range(edge_feature_number)]
+
+            # Graph edge
+            edge_feature[0] = 1.0
+            edge_features.append(edge_feature)
+
+        # アクションを表す特殊ノードを、関係ありそうなノードとエッジを張りながら追加
+        # Add action nodes from lcomp and pivoting lists and connect them
+        for node in lcomp_nodes:
+            node_feature = [0 for _ in range(number_node_features)]
+            node_feature[11] = 1.0
+            node_features.append(node_feature)
+            identifier.append(node * self.shape + node)
+            # Connect the node to the rest of the graph
+            edge_list.append((node, current_node))
+            edge_feature = [0 for _ in range(edge_feature_number)]
+            edge_feature[1] = 1.0
+            edge_features.append(edge_feature)
+
+            current_node += 1
+
+        for node in iden_nodes:
+            node_feature = [0 for _ in range(number_node_features)]
+            node_feature[14] = 1.0
+            node_features.append(node_feature)
+            identifier.append(self.shape**2 + node)
+            edge_list.append((node, current_node))
+            edge_feature = [0 for _ in range(edge_feature_number)]
+            edge_feature[3] = 1.0
+            edge_features.append(edge_feature)
+
+            current_node += 1
+
+        for node1, node2 in piv_nodes:
+            node_feature = [0 for _ in range(number_node_features)]
+            node_feature[12] = 1.0
+            node_features.append(node_feature)
+            identifier.append(node1 * self.shape + node2)
+            # graph_node1 = mapping[node1]
+            # graph_node2 = mapping[node2]
+            edge_list.append((node1, current_node))
+            edge_list.append((node2, current_node))
+            edge_feature = [0 for _ in range(edge_feature_number)]
+            edge_feature[2] = 1.0
+            edge_features.append(edge_feature)
+            edge_features.append(edge_feature)
+
+            current_node += 1
+
+        for idx, gadgetf in enumerate(info['gf_nodes']):
+
+            node_feature = [0 for _ in range(number_node_features)]
+            node_feature[15] = 1.0
+            node_features.append(node_feature)
+            identifier.append(-(idx + 2))
+
+            for node in gadgetf:
+                # graph_node = mapping[node]
+                edge_list.append((node, current_node))
+                edge_feature = [0 for _ in range(edge_feature_number)]
+                edge_feature[4] = 1.0
+                edge_features.append(edge_feature)
+
+            current_node += 1
+
+        # Add action for STOP node
+        # STOPノードはほかのすべてのノードにエッジを張る
+        node_feature = [0 for _ in range(number_node_features)]
+        node_feature[13] = 1.0
+        node_features.append(node_feature)
+        identifier.append(self.shape * (self.shape + 1) + 1)
+
+        for j in range(n_nodes, current_node):
+            # Other actions feed Stop Node
+            edge_list.append((j, current_node))
+            edge_feature = [0 for _ in range(edge_feature_number)]
+            edge_feature[5] = 1.0
+            edge_features.append(edge_feature)
+
+        # Create tensor objects
+        x = torch.tensor(node_features).view(-1, number_node_features)
+        x = x.type(torch.float32)
+        edge_index = torch.tensor(edge_list).t().contiguous()
+        edge_features = torch.tensor(edge_features).view(-1, edge_feature_number)
+        identifier[:n_nodes] = [-1] * n_nodes
+        identifier = torch.tensor(identifier)
+
+        # NOTE(cgp): x, yの長さはグラフのノード数によって異なる.
+        # x: ノード特徴量
+        # edge_index: グラフの接続関係を表す
+        # edge_attr: エッジ特徴量
+        # y: action identifier
+        return torch_geometric.data.Data(
+            x=x.to(self.device),
+            edge_index=edge_index.to(self.device),
+            edge_attr=edge_features.to(self.device),
+            y=identifier.to(self.device),
+        )
+
+    # critic用の観測情報を作る
+    # zxdiagramから(node_features, edge_index, edge_features)を作成して、torch.tensorで返す
+    # node_features: [位相情報8個, 入力境界？, 出力境界？, フェーズガジェット？]
+    # edge_features: [1, 0, 0]固定
+    def get_value_feature_graph2(self, graph) -> torch_geometric.data.Data:
+        # Graph_nx = nx.Graph()
+        v_list = list(graph.vertices())  # vertices list
+        e_list = list(graph.edge_set())  # edges list
+        # sort e_list by first
+        e_list = sorted(e_list, key=lambda x: x[0])
+        # create networkx graph
+        # Graph_nx.add_nodes_from(v_list)
+        # Graph_nx.add_edges_from(e_list)
+        
+        identifier = v_list.copy()
+        
+        # relabel 0->N nodes
+        # mapping = {node: i for i, node in enumerate(Graph_nx.nodes)}
+        # identifier = [0 for _ in mapping.items()]
+        # for key in mapping.keys():
+        #     identifier[mapping[key]] = key
+        # V = nx.relabel_nodes(Graph_nx, mapping)
+
+        neighbors_inputs = []
+        for vertice in list(graph.inputs()):
+            neighbors_inputs.append(list(graph.neighbors(vertice))[0])
+
+        neighbors_outputs = []
+        for vertice in list(graph.outputs()):
+            neighbors_outputs.append(list(graph.neighbors(vertice))[0])
+
+        node_features = []
+        for node in sorted(v_list):
+            real_node = identifier[node]
+            # Features: Onehot PHASE, Frontier In, Frontier 0ut, Phase Gadget, NOT INCLUDED EXTRACTION COST
+            node_feature = [0.0 for _ in range(11)]
+
+            # Frontier Node
+            if real_node in graph.inputs():
+                node_feature[8] = 1.0
+            elif real_node in graph.outputs():
+                node_feature[9] = 1.0
+            else:
+                oh_phase_idx = int(graph.phase(real_node) / (0.25))
+                node_feature[oh_phase_idx] = 1.0
+                if graph.neighbors(real_node) == 1:  # Phase Gadget
+                    node_feature[10] = 1.0
+
+            node_features.append(node_feature)
+
+        # Convert edges into bidirectional
+        edge_list = list(e_list)
+        for node1, node2 in copy.copy(edge_list):
+            edge_list.append((node2, node1))
+
+        edge_features = []
+        for node1, node2 in edge_list:
+            # Edge in graph, pull node, pushed node.
+            edge_feature = [1.0, 0.0, 0.0]
+            edge_features.append(edge_feature)
+        
+        edge_index_value = torch.tensor(edge_list).t().contiguous()
+        x_value = torch.tensor(node_features).view(-1, 11)
+        x_value = x_value.type(torch.float32)
+        edge_features = torch.tensor(edge_features).view(-1, 3)
+        
+        return torch_geometric.data.Data(x=x_value.to(self.device), edge_index=edge_index_value.to(self.device), edge_attr=edge_features.to(self.device))
+
+
 
     # x: [Batch, Batch]
     # エージェントが次にとりたいと考えている行動を取得する. ついでに付加的な情報も返す. 
@@ -430,6 +678,16 @@ class AgentGNN(nn.Module):
             policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i) for g, i in zip(graph,info)])
         else:
             policy_obs = self.get_policy_feature_graph(graph,info)
+    
+        # for g, i in zip(graph,info):
+        #     _policy_obs = self.get_policy_feature_graph(g,i)
+        #     _policy_obs2 = self.get_policy_feature_graph2(g,i)
+        #     assert torch.all(_policy_obs.x == _policy_obs2.x)
+        #     # assert torch.all(_policy_obs.edge_index == _policy_obs2.edge_index)
+        #     assert torch.all(_policy_obs.edge_attr == _policy_obs2.edge_attr)
+        #     assert torch.all(_policy_obs.y == _policy_obs2.y)
+
+
         logits = self.actor(policy_obs)
 
         # print("logits", len(list(logits.flatten())), list(logits.flatten()))
@@ -475,11 +733,17 @@ class AgentGNN(nn.Module):
         
         logprob = categoricals.log_prob(action.cpu())
         entropy = categoricals.entropy()
-        return action.T, logprob, entropy, torch.tensor(action_logits).to(device).reshape(-1, 1), action_id.T
+        return action.T.to(device), logprob.to(device), entropy.to(device), torch.tensor(action_logits).to(device).reshape(-1, 1), action_id.T.to(device)
 
     def get_value(self, graph):
         if isinstance(graph,(tuple,list)):
             value_obs = torch_geometric.data.Batch.from_data_list([self.get_value_feature_graph(g) for g in graph])
+            # for g in graph:
+            #     _value_obs = self.get_value_feature_graph(g)
+            #     _value_obs2 = self.get_value_feature_graph2(g)
+            #     assert torch.all(_value_obs.x == _value_obs2.x)
+            #     assert torch.all(_value_obs.edge_index == _value_obs2.edge_index)
+            #     assert torch.all(_value_obs.edge_attr == _value_obs2.edge_attr)
         else:
             value_obs = self.get_value_feature_graph(graph)
         values = self.critic(value_obs)

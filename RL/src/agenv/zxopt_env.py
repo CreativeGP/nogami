@@ -59,6 +59,7 @@ class ZXEnvBase(gym.Env):
 
 
 
+    # action id = 0: STOP, 1: LC, 2: PV, 3: ID,5: GF
     def step(self, action):
 
         if int(action) == int(self.shape) * (int(self.shape) + 1) + 1:

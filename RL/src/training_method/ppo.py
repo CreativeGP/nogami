@@ -1,5 +1,4 @@
-import random
-import time
+import random, time, sys, signal
 from socket import gethostname
 import shutil
 
@@ -45,18 +44,37 @@ class PPO():
         
         self.traj = Trajectory(self.envs, self.agent, logger=self.logger, device=self.device)
         self.traj.reset()
-        if args.checkpoint != "":
+        if args.checkpoint is not None:
             self.traj.global_step = args.global_step
         num_updates = self.args.total_timesteps // self.args.batch_size
+        self.start_update = self.traj.global_step // self.args.batch_size if args.checkpoint is not None else 0
 
         self.init_logger_data()
+
+        signal.signal(signal.SIGINT, self.signal_handler)
+        signal.signal(signal.SIGTERM, self.signal_handler)
+
     
     def __del__(self):
+        self.clean_up_log()
+    
+    def signal_handler(self, sig, frame):
+        self.clean_up_log()
+        sys.exit(0)
+
+    def clean_up_log(self):
         print(self.run_name)
-        if self.traj.global_step < 8000:
-            # remove directory
-            print(f"Global steps {self.traj.global_step} is less than 8000. Removing directory...")
-            shutil.rmtree(rootdir(f"/runs/{self.run_name}"))
+        if self.args.checkpoint is not None:
+            if self.traj.global_step-self.args.global_step < 8000:
+                # remove directory
+                print(f"Global steps {self.traj.global_step} is less than 8000. Removing directory...")
+                shutil.rmtree(rootdir(f"/runs/{self.run_name}"))
+        else:
+            if self.traj.global_step < 8000:
+                # remove directory
+                print(f"Global steps {self.traj.global_step} is less than 8000. Removing directory...")
+                shutil.rmtree(rootdir(f"/runs/{self.run_name}"))
+
     
     def init_logger_data(self):
         self.logger.data['cumulative_reward'] = []
@@ -80,8 +98,9 @@ class PPO():
 
         print(f"Run start: {self.run_name}")
 
+
         NUM_UPDATES = 2048
-        for update in range(NUM_UPDATES):
+        for update in range(self.start_update, NUM_UPDATES):
             if update % 10 == 1:
                 torch.save(self.agent.state_dict(), rootdir(f"/checkpoints/state_dict_{self.run_name}_{self.traj.global_step}_model5x70_gates_new.pt"))
             if self.args.anneal_lr:
