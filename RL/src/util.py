@@ -131,3 +131,47 @@ def tracefunc(frame, event, arg, indent=[0]):
         print("<" + "-" * indent[0], "exit function", frame.f_code.co_name)
         indent[0] -= 2
     return tracefunc
+
+
+import sys
+from itertools import chain
+from collections import deque
+
+def compute_object_size(o, handlers={}):
+    dict_handler = lambda d: chain.from_iterable(d.items())
+    all_handlers = {tuple: iter,
+                    list: iter,
+                    deque: iter,
+                    dict: dict_handler,
+                    set: iter,
+                    frozenset: iter,
+                   }
+    all_handlers.update(handlers)     # user handlers take precedence
+    seen = set()                      # track which object id's have already been seen
+    default_size = sys.getsizeof(0)       # estimate sizeof object without __sizeof__
+
+    def sizeof(o):
+        if id(o) in seen:       # do not double count the same object
+            return 0
+        seen.add(id(o))
+        s = sys.getsizeof(o, default_size)
+
+        for typ, handler in all_handlers.items():
+            if isinstance(o, typ):
+                s += sum(map(sizeof, handler(o)))
+                break
+        return s
+
+    return sizeof(o)
+
+def all_memory_usage(thres=1e6):
+    import inspect
+
+    memsum = 0
+    for obj in gc.get_objects():
+        size = compute_object_size(obj)
+        memsum += size
+        if size > thres:
+            print(size, inspect.getmembers(obj) )
+
+    print(f"Memory usage: {memsum} bytes")

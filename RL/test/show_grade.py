@@ -5,7 +5,6 @@ import json
 import random
 from distutils.util import strtobool
 
-import pandas as pd
 import numpy as np
 import pyzx as zx
 import torch

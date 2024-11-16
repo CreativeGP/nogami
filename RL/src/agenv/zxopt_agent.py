@@ -70,12 +70,13 @@ class AgentGNN(nn.Module):
         self,
         envs,
         device,
+        args,
         c_hidden=32,
         c_hidden_v=32,
         **kwargs,
     ):
         super().__init__()
-
+        self.args = args
         self.device = device
         # self.obs_shape = envs.envs[0].shape
         # self.bin_required = int(np.ceil(np.log2(self.obs_shape)))
@@ -674,10 +675,17 @@ class AgentGNN(nn.Module):
         # この場合, policy_obsはtorch_geometric.data.Batchという形になる.
         # この Batch は、複数のグラフをまとめて扱うためのクラスで、これをself.actor()に入力することで、envs分のlogitsが得られる.
         # 下の方の、policy_obs.num_graphsのループで[policy_obs.batch == b]でバッチ毎に分割して処理する.
-        if isinstance(graph,(tuple,list,np.ndarray)):
-            policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i) for g, i in zip(graph,info)])
+        if self.args.impl_light_feature:
+            if isinstance(graph,(tuple,list,np.ndarray)):
+                policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph2(g,i) for g, i in zip(graph,info)])
+            else:
+                policy_obs = self.get_policy_feature_graph2(graph,info)
         else:
-            policy_obs = self.get_policy_feature_graph(graph,info)
+            if isinstance(graph,(tuple,list,np.ndarray)):
+                policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i) for g, i in zip(graph,info)])
+            else:
+                policy_obs = self.get_policy_feature_graph(graph,info)
+
     
         # for g, i in zip(graph,info):
         #     _policy_obs = self.get_policy_feature_graph(g,i)
@@ -736,16 +744,22 @@ class AgentGNN(nn.Module):
         return action.T.to(device), logprob.to(device), entropy.to(device), torch.tensor(action_logits).to(device).reshape(-1, 1), action_id.T.to(device)
 
     def get_value(self, graph):
-        if isinstance(graph,(tuple,list)):
-            value_obs = torch_geometric.data.Batch.from_data_list([self.get_value_feature_graph(g) for g in graph])
-            # for g in graph:
-            #     _value_obs = self.get_value_feature_graph(g)
-            #     _value_obs2 = self.get_value_feature_graph2(g)
-            #     assert torch.all(_value_obs.x == _value_obs2.x)
-            #     assert torch.all(_value_obs.edge_index == _value_obs2.edge_index)
-            #     assert torch.all(_value_obs.edge_attr == _value_obs2.edge_attr)
+        if self.args.impl_light_feature:
+            if isinstance(graph,(tuple,list)):
+                value_obs = torch_geometric.data.Batch.from_data_list([self.get_value_feature_graph2(g) for g in graph])
+                # for g in graph:
+                #     _value_obs = self.get_value_feature_graph(g)
+                #     _value_obs2 = self.get_value_feature_graph2(g)
+                #     assert torch.all(_value_obs.x == _value_obs2.x)
+                #     assert torch.all(_value_obs.edge_index == _value_obs2.edge_index)
+                #     assert torch.all(_value_obs.edge_attr == _value_obs2.edge_attr)
+            else:
+                value_obs = self.get_value_feature_graph2(graph)
         else:
-            value_obs = self.get_value_feature_graph(graph)
+            if isinstance(graph,(tuple,list)):
+                value_obs = torch_geometric.data.Batch.from_data_list([self.get_value_feature_graph(g) for g in graph])
+            else:
+                value_obs = self.get_value_feature_graph(graph)
         values = self.critic(value_obs)
         values = values.squeeze(-1)
         return values# 

@@ -1,7 +1,4 @@
-import os
-import argparse
-import time
-import random
+import random, time, argparse, os
 from distutils.util import strtobool
 from socket import gethostname
 
@@ -92,6 +89,9 @@ def parse_args():
     # args and dept
     parser.add_argument("--qubits", type=int, default=5, help="training qubits")
     parser.add_argument("--depth", type=int, default=60, help="training depth(=gates)")
+
+    # 強化学習に関係ない実装詳細のスイッチ
+    parser.add_argument("--impl-light-feature", type=lambda x: bool(strtobool(x)), default=False, nargs="?",help="if toggled, the implementation details will be lightened")
 
     args = parser.parse_args()
 
@@ -198,7 +198,7 @@ if __name__ == "__main__":
             [make_env(args.gym_id, args.seed + i, i, args.capture_video, run_name, qubits, depth, args.gate_type) for i in range(args.num_envs)],
         )
 
-    agent = AgentGNN(envs, device).to(device)
+    agent = AgentGNN(envs, device, args).to(device)
     if args.checkpoint is not None:
         agent.load_state_dict(
             torch.load(args.checkpoint, map_location=torch.device("cpu"))
