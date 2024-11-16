@@ -180,7 +180,8 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = False
 
     print("CPU Random State:",torch.get_rng_state())
-    print("GPU Random State:",torch.cuda.get_rng_state(device='cuda'))
+    if torch.cuda.is_available():
+        print("GPU Random State:",torch.cuda.get_rng_state(device='cuda'))
 
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
