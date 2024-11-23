@@ -1,12 +1,5 @@
-import os
-import sys
-import argparse
-import json
-import random
-import time
+import argparse, json, random, time, os, sys, threading
 from distutils.util import strtobool
-import json
-import multiprocessing as mp
 import argparse
 
 import gym
@@ -14,7 +7,7 @@ import pandas as pd
 import numpy as np
 import pyzx as zx
 import torch
-import dill
+# import dill
 from torch_geometric.data import Batch, Data
 
 # NOTE(cgp): あまりよくないらしいけど、ルートモジュールより上を経由するにはこうするしかないかも
@@ -54,16 +47,16 @@ args = parse_args()
 model_file_name = args.model.split("/")[-1].split('.')[0]
 filedir = os.path.dirname(__file__)
 
-class DillProcess(mp.Process):
+# class DillProcess(mp.Process):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._target = dill.dumps(self._target)  # Save the target function as bytes, using dill
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self._target = dill.dumps(self._target)  # Save the target function as bytes, using dill
 
-    def run(self):
-        if self._target:
-            self._target = dill.loads(self._target)    # Unpickle the target function before executing
-            self._target(*self._args, **self._kwargs)  # Execute the target function
+#     def run(self):
+#         if self._target:
+#             self._target = dill.loads(self._target)    # Unpickle the target function before executing
+#             self._target(*self._args, **self._kwargs)  # Execute the target function
 
 
 
@@ -114,7 +107,7 @@ class MpData():
             self.rl_stats[key].extend(local.rl_stats[key])
         for key in self.pyzx_stats:
             self.pyzx_stats[key].extend(local.pyzx_stats[key])
-        for key in self.rlbo_stats_stats:
+        for key in self.bo_stats:
             self.bo_stats[key].extend(local.bo_stats[key])
         for key in self.initial_stats:
             self.initial_stats[key].extend(local.initial_stats[key])
@@ -136,13 +129,13 @@ def mp_worker(loop_num, args, master):
 
     run_name = "HP5"
     capture_video = False
-    # envs = CustomizedSyncVectorEnv(
-    #     [(lambda: make_env(args.gym_id, args.seed + i, i, capture_video, run_name, qubits, depth, args.gate_type)) for i in range(args.num_envs)]
-    # )
-    qubits, depth = 5, 60
-    envs = make_env(args.gym_id, args.seed, 0, capture_video, run_name, qubits, depth, args.gate_type)
+    envs = CustomizedSyncVectorEnv(
+        [(lambda: make_env(args.gym_id, args.seed + i, i, capture_video, run_name, args.qubits, args.depth, args.gate_type)) for i in range(args.num_envs)]
+    )
+    # envs = make_env(args.gym_id, args.seed, 0, capture_video, run_name, qubits, depth, args.gate_type)
 
-    agent = AgentGNN(envs, device).to(device)  
+    print(args)
+    agent = AgentGNN(envs, device, args).to(device)  
 
     agent.load_state_dict(
         torch.load(args.model, map_location=torch.device("cpu"))
@@ -151,21 +144,25 @@ def mp_worker(loop_num, args, master):
 
 
     local = MpData()
+    print(loop_num)
     for episode in range(loop_num):  
         done = False
         obs0, reset_info = envs.reset()
         local.full_reduce_time.append(reset_info[0]["full_reduce_time"])
         state, info = [reset_info[0]["graph_obs"]], reset_info
 
+        logprobs = []
+
         start = time.time()
         while not done:
-            action, _, _, _, action_id = agent.get_next_action(state, info, device=device)
+            action, logprob, _, _, action_id = agent.get_next_action(state, info, device=device)
             action = action.flatten()
+            logprobs.append(logprob.item())
             state, reward, done, deprecated, info = envs.step(action_id.cpu().numpy())
         end = time.time()
 
         local.rl_time.append(end - start)
-        info = info["final_info"]
+        info = info[0]["final_info"]
         rl_circ_s = info["rl_stats"]
         bo_circ_s = info["bo_stats"]
         no_opt_s = info["no_opt_stats"]
@@ -187,7 +184,7 @@ def mp_worker(loop_num, args, master):
         local.rl_stats["initial_depth"].append(info["initial_depth"])
         local.rl_stats["depth"].append(info["depth"])
 
-        # print(info["action_pattern"])
+        print([[tup[0],tup[1],logprobs[i]] for i, tup in enumerate(info["action_pattern"])])
         
         action_pattern_df = pd.DataFrame(info["action_pattern"])
         
@@ -255,31 +252,33 @@ def get_results(param):
     # agent.eval()
    
     master = MpData()
-    process = []
+    threads = []
     loop_num = args.num_episodes//args.num_process
-    mp.set_start_method("spawn")
+    args.qubits = qubits
+    args.depth = depth
+    # threading.set_start_method("spawn")
     for i in range(args.num_process):
         # NOTE(cgp): 平均取ることを想定してるから、seedは厳密にやらなくていいよね
-        p = DillProcess(target=mp_worker, args=(loop_num, args, master))
-        p.start()
-        process.append(p)
+        th = threading.Thread(target=mp_worker, args=(loop_num, args, master))
+        th.start()
+        threads.append(th)
         # seed += 25*i
-    for p in process:
-        p.join()
+    for t in threads:
+        t.join()
 
 
-    if not os.path.exists(rootdir(f"/grading_data/{model_file_name}")):
-        os.makedirs(rootdir(f"/grading_data/{model_file_name}"))
-    master.rl_action_pattern.to_csv(rootdir(f"/grading_data/{model_file_name}/action_pattern_{qubits}x{depth}.json"), index=False)  
+    if not os.path.exists(rootdir(f"/test/grading_data/{model_file_name}")):
+        os.makedirs(rootdir(f"/test/grading_data/{model_file_name}"))
+    master.rl_action_pattern.to_csv(rootdir(f"/test/grading_data/{model_file_name}/action_pattern_{qubits}x{depth}.json"), index=False)  
    
-    with open(rootdir(f"/grading_data/{model_file_name}/rl_stats_stopping_{qubits}x{depth}.json"), "w") as f:
+    with open(rootdir(f"/test/grading_data/{model_file_name}/rl_stats_stopping_{qubits}x{depth}.json"), "w") as f:
         json.dump(master.rl_stats, f)
-    with open(rootdir(f"/grading_data/{model_file_name}/pyzx_stats_stopping_{qubits}x{depth}.json"), "w") as f:
+    with open(rootdir(f"/test/grading_data/{model_file_name}/pyzx_stats_stopping_{qubits}x{depth}.json"), "w") as f:
         json.dump(master.pyzx_stats, f)
 
-    with open(rootdir(f"/grading_data/{model_file_name}/initial_stats_stopping_{qubits}x{depth}.json"), "w") as f:
+    with open(rootdir(f"/test/grading_data/{model_file_name}/initial_stats_stopping_{qubits}x{depth}.json"), "w") as f:
         json.dump(master.initial_stats, f)
-    with open(rootdir(f"/grading_data/{model_file_name}/bo_stats_stopping_{qubits}x{depth}.json"), "w") as f:
+    with open(rootdir(f"/test/grading_data/{model_file_name}/bo_stats_stopping_{qubits}x{depth}.json"), "w") as f:
         json.dump(master.bo_stats, f)
     
     return np.mean(master.full_reduce_time), np.mean(master.rl_time), np.std(master.full_reduce_time), np.std(master.rl_time)
@@ -316,5 +315,5 @@ if __name__ == "__main__":
             rl_time_var.append(rl_var)
             print(rl_time, rl_var)
             
-        with open(rootdir(f"/grading_data/{model_file_name}/time_depth_{qubit}x{depth}.json")) as f:
+        with open(rootdir(f"/test/grading_data/{model_file_name}/time_depth_{qubit}x{depth}.json"), 'w') as f:
             json.dump({"full_time":fr_time_depth, "rl_time":rl_time_depth, "full_var":fr_time_var, "rl_var":rl_time_var}, f)

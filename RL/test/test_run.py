@@ -28,8 +28,9 @@ def parse_args():
     parser.add_argument("--model", type=str, default="/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_5369856_zx-v0__training2-with-vtargetvar-add__8983440__1730560905.pt")
     parser.add_argument("--cliffordT", type=int, nargs=2, default=None, help="two integers for Clifford+T optimization")
     # parser.add_argument("--qasm", type=str, default="")
-    parser.add_argument("--qasm", type=str, default="/home/wsl/Research/nogami/zx/qasm/mod_adder_1024.qasm")
+    parser.add_argument("--qasm", type=str, default=None,)#default="/home/wsl/Research/nogami/zx/qasm/mod_adder_1024.qasm")
     parser.add_argument("-n", type=int, default=1, help="number of circuits")
+    parser.add_argument("--stop-at", type=int, default=-1, help="RLエージェントが終了する操作数を強制的に設定する")
 
     parser.add_argument("--gate-type", type=str, default="gates")
     # parser.add_argument("--num-envs", type=int, default=1,
@@ -73,14 +74,14 @@ def make_env(gym_id, seed, idx, capture_video, run_name, gate_type, g):
     return thunk
 
 
-def get_results(agent):
+def get_results(agent,i):
     global args
     rl_time, full_reduce_time = [], []
 
     if args.seed != 10000:
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
+        random.seed(args.seed+i)
+        np.random.seed(args.seed+i)
+        torch.manual_seed(args.seed+i)
         torch.backends.cudnn.deterministic = args.torch_deterministic
     else:
         random.seed(random.randint(0, 1000000))
@@ -95,6 +96,7 @@ def get_results(agent):
         circuit = zx.Circuit.load(args.qasm).to_basic_gates()
         g = circuit.to_graph()
     elif args.cliffordT is not None:
+        print(args.cliffordT)
         g = zx.generate.cliffordT(args.cliffordT[0], args.cliffordT[1])
         circuit = zx.Circuit.from_graph(g).to_basic_gates()
     qubits, depth = circuit.qubits, len(circuit.gates)
@@ -145,10 +147,16 @@ def get_results(agent):
     state, info = [reset_info[0]["graph_obs"]], reset_info
 
     start = time.time()
+    count = 0
     while not done:
-        action, _, _, _, action_id = agent.get_next_action(state, info, device=device)
+        action, _, _, _, action_id = agent.get_next_action(state, info, device=device, mask_stop=args.stop_at > 0)
         action = action.flatten()
-        state, reward, done, deprecated, info = envs.step(action_id.cpu().numpy())
+        if args.stop_at > 0 and count >= args.stop_at:
+            # 強制終了
+            state, reward, done, deprecated, info = envs.step(np.array([0]))
+        else:
+            state, reward, done, deprecated, info = envs.step(action_id.cpu().numpy())
+        count += 1
     end = time.time()
 
     wins = info[0]["final_info"]["win_vs_pyzx"]
@@ -198,5 +206,5 @@ if __name__ == "__main__":
     )
     agent.eval()
 
-    for _ in range(args.n):
-        get_results(agent)
+    for i in range(args.n):
+        get_results(agent,i)
