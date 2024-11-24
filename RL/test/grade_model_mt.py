@@ -16,7 +16,6 @@ from src.util import rootdir, CustomizedSyncVectorEnv
 from src.agenv.zxopt_agent import get_agent, get_agent_from_state_dict
 
 global device
-device = torch.device("cuda")
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -287,6 +286,7 @@ if __name__ == "__main__":
         # entry_point=lambda qubit, depth: ZXEnv(qubit, depth),
         entry_point=f"src.agenv.zxopt_env:ZXEnv",
     )
+    device = torch.device("cuda") if torch.cuda.is_available() and args.cuda else torch.device("cpu")
 
     print(model_file_name)
 
