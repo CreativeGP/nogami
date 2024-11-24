@@ -80,7 +80,7 @@ def get_results(param):
         [make_env(args.gym_id, args.seed + i, i, capture_video, run_name, qubits, depth, args.gate_type) for i in range(args.num_envs)]
     )
 
-    agent = get_agent_from_state_dict(envs, device, agent, torch.load(args.model, map_location=torch.device("cpu"))).to(device)  
+    agent = get_agent_from_state_dict(envs, device, args, torch.load(args.model, map_location=torch.device("cpu"))).to(device)  
 
     agent.eval()
    
