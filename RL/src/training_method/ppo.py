@@ -102,7 +102,9 @@ class PPO():
         NUM_UPDATES = 2048
         for update in range(self.start_update, NUM_UPDATES):
             if update % 10 == 1:
-                torch.save(self.agent.state_dict(), rootdir(f"/checkpoints/state_dict_{self.run_name}_{self.traj.global_step}_model5x70_gates_new.pt"))
+                state_dict = self.agent.state_dict()
+                state_dict['agent'] = self.args.agent if self.args.agent is not None else "original"
+                torch.save(state_dict, rootdir(f"/checkpoints/state_dict_{self.run_name}_{self.traj.global_step}_model5x70_gates_new.pt"))
             if self.args.anneal_lr:
                 frac = max(1.0 / 100, 1.0 - (update - 1.0) / (NUM_UPDATES * 5.0 / 6))
                 lrnow = frac * self.args.learning_rate
@@ -150,7 +152,9 @@ class PPO():
         self.envs.close()
         self.logger.close()
 
-        torch.save(self.agent.state_dict(), "state_dict_model5x70_twoqubits_new.pt")
+        state_dict = self.agent.state_dict()
+        state_dict['agent'] = self.args.agent if self.args.agent is not None else "original"
+        torch.save(state_dict, "state_dict_model5x70_twoqubits_new.pt")
 
     def update_networks(self):
         print(np.count_nonzero(self.traj.rewards.cpu().numpy() < -0.1))

@@ -678,10 +678,7 @@ class RLOptimizer(TraversalOptimizer):
                 return env
 
             return thunk
-        self.agent = AgentGNN(None, self.device).to(self.device)
-        self.agent.load_state_dict(
-            torch.load("/home/wsl/Research/nogami/zx/state_dict_model5x60_new.pt", map_location=torch.device("cpu"))
-        )
+        self.agent = get_agent_from_state_dict(None, self.device, self.args, torch.load("/home/wsl/Research/nogami/zx/state_dict_model5x60_new.pt", map_location=torch.device("cpu")).to(self.device)
         self.agent.eval()
 
                 #  Action: id, pivot, pivot_boudary, pivot_gadget, lcomp, gadget fusion

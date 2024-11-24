@@ -90,6 +90,9 @@ def parse_args():
     parser.add_argument("--qubits", type=int, default=5, help="training qubits")
     parser.add_argument("--depth", type=int, default=60, help="training depth(=gates)")
 
+
+    parser.add_argument("--agent", type=str, default='original', help="neural network structure")
+
     # 強化学習に関係ない実装詳細のスイッチ
     parser.add_argument("--impl-light-feature", type=lambda x: bool(strtobool(x)), default=False, nargs="?",help="if toggled, the implementation details will be lightened")
 
@@ -164,7 +167,7 @@ print("__name__", __name__)
 
 if __name__ == "__main__":
     from src.training_method.ppo import PPO
-    from src.agenv.zxopt_agent import AgentGNN
+    from src.agenv.zxopt_agent import get_agent
     from src.util import CustomizedAsyncVectorEnv, CustomizedSyncVectorEnv
 
     args = parse_args()
@@ -199,7 +202,7 @@ if __name__ == "__main__":
             [make_env(args.gym_id, args.seed + i, i, args.capture_video, run_name, qubits, depth, args.gate_type) for i in range(args.num_envs)],
         )
 
-    agent = AgentGNN(envs, device, args).to(device)
+    agent = get_agent(envs, device, args).to(device)
     if args.checkpoint is not None:
         agent.load_state_dict(
             torch.load(args.checkpoint, map_location=torch.device("cpu"))

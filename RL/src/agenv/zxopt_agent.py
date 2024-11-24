@@ -64,129 +64,12 @@ class Agent(ABC):
 #         return action, logprob, None, value, None, None
 
 
-
-class AgentGNN(nn.Module):
-    def __init__(
-        self,
-        envs,
-        device,
-        args,
-        c_hidden=32,
-        c_hidden_v=32,
-        **kwargs,
-    ):
-        super().__init__()
-        self.args = args
-        self.device = device
-        # self.obs_shape = envs.envs[0].shape
-        # self.bin_required = int(np.ceil(np.log2(self.obs_shape)))
-        self.envs = envs
-        self.shape = 3000
-        self.obs_shape = self.shape # NOTE(cgp): おそらく、policy_obsの長さの最大値
-        #self.qubits = envs.envs[0].qubits
-
-        c_in_p = 16
-        c_in_v = 11
-        edge_dim = 6
-        edge_dim_v = 3
-        self.global_attention_critic = geom_nn.GlobalAttention(
-            gate_nn=nn.Sequential(
-                nn.Linear(c_hidden, c_hidden),
-                nn.ReLU(),
-                nn.Linear(c_hidden, c_hidden),
-                nn.ReLU(),
-                nn.Linear(c_hidden, 1),
-            ),
-            nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
-        )
-
-        self.critic_gnn = geo_Sequential(
-            "x, edge_index, edge_attr",
-            [
-                (
-                    geom_nn.GATv2Conv(c_in_v, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-            ],
-        )
-
-        self.actor_gnn = geom_nn.Sequential(
-            "x, edge_index, edge_attr",
-            [
-                (
-                    geom_nn.GATv2Conv(c_in_p, c_hidden, edge_dim=edge_dim, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (nn.Linear(c_hidden, c_hidden),),
-                nn.ReLU(),
-                (nn.Linear(c_hidden, 1),),
-            ],
-        )
-
-        self.critic_ff = nn.Sequential(
-            nn.Linear(c_hidden_v, c_hidden_v),
-            nn.ReLU(),
-            nn.Linear(c_hidden_v, c_hidden_v),
-            nn.ReLU(),
-            nn.Linear(c_hidden_v, out_features=1),
-        )
-
-    def actor(self, x):
-        logits = self.actor_gnn(x.x, x.edge_index, x.edge_attr)
-        return logits
-
-    def critic(self, x):
-        features = self.critic_gnn(x.x, x.edge_index, x.edge_attr)
-        aggregated = self.global_attention_critic(features, x.batch)
-        return self.critic_ff(aggregated)
-
-            # zxdiagramから(node_features, edge_index, edge_features、identifier)を作成して、torch.tensorで返す
+class AgentGNNBase(nn.Module):
+        # zxdiagramから(node_features, edge_index, edge_features、identifier)を作成して、torch.tensorで返す
     # node_features: [位相情報18個, 入力境界？, 出力境界？, フェーズガジェット？, 行動用ノードのための情報...]
     # edge_features: [普通のエッジ、lcomp, ident, pivot, fusion, stop]
     # identifier: 普通のノードは-1, 他はaction毎に特殊なスカラー
-    def get_policy_feature_graph(self, graph, info) -> torch_geometric.data.Data:
+    def get_policy_feature_graph(self, graph, info, mask_stop=False) -> torch_geometric.data.Data:
         """Enters the graph in format ZX"""
         piv_nodes = info['piv_nodes']
         lcomp_nodes = info['lcomp_nodes']
@@ -324,17 +207,18 @@ class AgentGNN(nn.Module):
 
         # Add action for STOP node
         # STOPノードはほかのすべてのノードにエッジを張る
-        node_feature = [0 for _ in range(number_node_features)]
-        node_feature[13] = 1.0
-        node_features.append(node_feature)
-        identifier.append(self.shape * (self.shape + 1) + 1)
+        if not mask_stop:
+            node_feature = [0 for _ in range(number_node_features)]
+            node_feature[13] = 1.0
+            node_features.append(node_feature)
+            identifier.append(self.shape * (self.shape + 1) + 1)
 
-        for j in range(n_nodes, current_node):
-            # Other actions feed Stop Node
-            edge_list.append((j, current_node))
-            edge_feature = [0 for _ in range(edge_feature_number)]
-            edge_feature[5] = 1.0
-            edge_features.append(edge_feature)
+            for j in range(n_nodes, current_node):
+                # Other actions feed Stop Node
+                edge_list.append((j, current_node))
+                edge_feature = [0 for _ in range(edge_feature_number)]
+                edge_feature[5] = 1.0
+                edge_features.append(edge_feature)
 
         # Create tensor objects
         x = torch.tensor(node_features).view(-1, number_node_features)
@@ -424,7 +308,7 @@ class AgentGNN(nn.Module):
     # node_features: [位相情報18個, 入力境界？, 出力境界？, フェーズガジェット？, 行動用ノードのための情報...]
     # edge_features: [普通のエッジ、lcomp, ident, pivot, fusion, stop]
     # identifier: 普通のノードは-1, 他はaction毎に特殊なスカラー
-    def get_policy_feature_graph2(self, graph, info) -> torch_geometric.data.Data:
+    def get_policy_feature_graph2(self, graph, info, mask_stop=False) -> torch_geometric.data.Data:
         """Enters the graph in format ZX"""
         piv_nodes = info['piv_nodes']
         lcomp_nodes = info['lcomp_nodes']
@@ -566,17 +450,18 @@ class AgentGNN(nn.Module):
 
         # Add action for STOP node
         # STOPノードはほかのすべてのノードにエッジを張る
-        node_feature = [0 for _ in range(number_node_features)]
-        node_feature[13] = 1.0
-        node_features.append(node_feature)
-        identifier.append(self.shape * (self.shape + 1) + 1)
+        if not mask_stop:
+            node_feature = [0 for _ in range(number_node_features)]
+            node_feature[13] = 1.0
+            node_features.append(node_feature)
+            identifier.append(self.shape * (self.shape + 1) + 1)
 
-        for j in range(n_nodes, current_node):
-            # Other actions feed Stop Node
-            edge_list.append((j, current_node))
-            edge_feature = [0 for _ in range(edge_feature_number)]
-            edge_feature[5] = 1.0
-            edge_features.append(edge_feature)
+            for j in range(n_nodes, current_node):
+                # Other actions feed Stop Node
+                edge_list.append((j, current_node))
+                edge_feature = [0 for _ in range(edge_feature_number)]
+                edge_feature[5] = 1.0
+                edge_features.append(edge_feature)
 
         # Create tensor objects
         x = torch.tensor(node_features).view(-1, number_node_features)
@@ -670,21 +555,21 @@ class AgentGNN(nn.Module):
 
     # x: [Batch, Batch]
     # エージェントが次にとりたいと考えている行動を取得する. ついでに付加的な情報も返す. 
-    def get_next_action(self, graph, info, action=None, device="cpu", testing=False):
+    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
         #  NOTE(cgp): vector envの場合、graphはリストになる. それぞれのgraphに対して特徴ベクトルを計算する.
         # この場合, policy_obsはtorch_geometric.data.Batchという形になる.
         # この Batch は、複数のグラフをまとめて扱うためのクラスで、これをself.actor()に入力することで、envs分のlogitsが得られる.
         # 下の方の、policy_obs.num_graphsのループで[policy_obs.batch == b]でバッチ毎に分割して処理する.
-        if self.args.impl_light_feature:
+        if self.args is not None and 'impl_light_feature' in self.args and self.args.impl_light_feature:
             if isinstance(graph,(tuple,list,np.ndarray)):
-                policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph2(g,i) for g, i in zip(graph,info)])
+                policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph2(g,i,mask_stop) for g, i in zip(graph,info)])
             else:
-                policy_obs = self.get_policy_feature_graph2(graph,info)
+                policy_obs = self.get_policy_feature_graph2(graph,info,mask_stop)
         else:
             if isinstance(graph,(tuple,list,np.ndarray)):
-                policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i) for g, i in zip(graph,info)])
+                policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i,mask_stop) for g, i in zip(graph,info)])
             else:
-                policy_obs = self.get_policy_feature_graph(graph,info)
+                policy_obs = self.get_policy_feature_graph(graph,info,mask_stop)
 
     
         # for g, i in zip(graph,info):
@@ -741,10 +626,10 @@ class AgentGNN(nn.Module):
         
         logprob = categoricals.log_prob(action.cpu())
         entropy = categoricals.entropy()
-        return action.T.to(device), logprob.to(device), entropy.to(device), torch.tensor(action_logits).to(device).reshape(-1, 1), action_id.T.to(device)
+        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device)
 
     def get_value(self, graph):
-        if self.args.impl_light_feature:
+        if self.args is not None and 'impl_light_feature' in self.args and  self.args.impl_light_feature:
             if isinstance(graph,(tuple,list)):
                 value_obs = torch_geometric.data.Batch.from_data_list([self.get_value_feature_graph2(g) for g in graph])
                 # for g in graph:
@@ -763,3 +648,252 @@ class AgentGNN(nn.Module):
         values = self.critic(value_obs)
         values = values.squeeze(-1)
         return values# 
+
+
+def get_agent(envs, device, args, **kwargs):
+    if args.agent == "original":
+        return AgentGNN1(envs, device, args, **kwargs)
+    elif args.agent == "parameter-shared":
+        return AgentGNN2(envs, device, args, **kwargs)
+
+def get_agent_from_state_dict(envs, device, args, state_dict, **kwargs):
+    agent = state_dict["agent"] if "agent" in state_dict else "original"
+    args['agent'] = agent
+    res = get_agent(envs, device, args, **kwargs)
+    res.load_state_dict(state_dict)
+    return res
+class AgentGNN1(AgentGNNBase):
+    def __init__(
+        self,
+        envs,
+        device,
+        args=None,
+        c_hidden=32,
+        c_hidden_v=32,
+        **kwargs,
+    ):
+        super().__init__()
+        self.args = args
+        self.device = device
+        # self.obs_shape = envs.envs[0].shape
+        # self.bin_required = int(np.ceil(np.log2(self.obs_shape)))
+        self.envs = envs
+        self.shape = 3000
+        self.obs_shape = self.shape # NOTE(cgp): おそらく、policy_obsの長さの最大値
+        #self.qubits = envs.envs[0].qubits
+
+        c_in_p = 16
+        c_in_v = 11
+        edge_dim = 6
+        edge_dim_v = 3
+        self.global_attention_critic = geom_nn.GlobalAttention(
+            gate_nn=nn.Sequential(
+                nn.Linear(c_hidden, c_hidden),
+                nn.ReLU(),
+                nn.Linear(c_hidden, c_hidden),
+                nn.ReLU(),
+                nn.Linear(c_hidden, 1),
+            ),
+            nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
+        )
+
+        self.critic_gnn = geo_Sequential(
+            "x, edge_index, edge_attr",
+            [
+                (
+                    geom_nn.GATv2Conv(c_in_v, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+            ],
+        )
+
+        self.actor_gnn = geom_nn.Sequential(
+            "x, edge_index, edge_attr",
+            [
+                (
+                    geom_nn.GATv2Conv(c_in_p, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (nn.Linear(c_hidden, c_hidden),),
+                nn.ReLU(),
+                (nn.Linear(c_hidden, 1),),
+            ],
+        )
+
+        self.critic_ff = nn.Sequential(
+            nn.Linear(c_hidden_v, c_hidden_v),
+            nn.ReLU(),
+            nn.Linear(c_hidden_v, c_hidden_v),
+            nn.ReLU(),
+            nn.Linear(c_hidden_v, out_features=1),
+        )
+
+    def actor(self, x):
+        logits = self.actor_gnn(x.x, x.edge_index, x.edge_attr)
+        return logits
+
+    def critic(self, x):
+        features = self.critic_gnn(x.x, x.edge_index, x.edge_attr)
+        aggregated = self.global_attention_critic(features, x.batch)
+        return self.critic_ff(aggregated)
+
+# Parameter Shared: Actor and Critic share the same GNN
+class AgentGNN2(AgentGNNBase):
+    def __init__(
+        self,
+        envs,
+        device,
+        args=None,
+        c_hidden=32,
+        c_hidden_v=32,
+        **kwargs,
+    ):
+        super().__init__()
+        self.args = args
+        self.device = device
+        # self.obs_shape = envs.envs[0].shape
+        # self.bin_required = int(np.ceil(np.log2(self.obs_shape)))
+        self.envs = envs
+        self.shape = 3000
+        self.obs_shape = self.shape # NOTE(cgp): おそらく、policy_obsの長さの最大値
+        #self.qubits = envs.envs[0].qubits
+
+        c_in_p = 16
+        c_in_v = 11
+        edge_dim = 6
+        edge_dim_v = 3
+        self.global_attention_critic = geom_nn.GlobalAttention(
+            gate_nn=nn.Sequential(
+                nn.Linear(c_hidden, c_hidden),
+                nn.ReLU(),
+                nn.Linear(c_hidden, c_hidden),
+                nn.ReLU(),
+                nn.Linear(c_hidden, 1),
+            ),
+            nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
+        )
+
+        self.critic_gnn = geo_Sequential(
+            "x, edge_index, edge_attr",
+            [
+                (
+                    geom_nn.GATv2Conv(c_in_v, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+            ],
+        )
+
+        self.actor_gnn = geom_nn.Sequential(
+            "x, edge_index, edge_attr",
+            [
+                (
+                    geom_nn.GATv2Conv(c_in_p, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim, add_self_loops=True),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                nn.ReLU(),
+                (nn.Linear(c_hidden, c_hidden),),
+                nn.ReLU(),
+                (nn.Linear(c_hidden, 1),),
+            ],
+        )
+
+        self.critic_ff = nn.Sequential(
+            nn.Linear(c_hidden_v, c_hidden_v),
+            nn.ReLU(),
+            nn.Linear(c_hidden_v, c_hidden_v),
+            nn.ReLU(),
+            nn.Linear(c_hidden_v, out_features=1),
+        )
+
+    def actor(self, x):
+        logits = self.actor_gnn(x.x, x.edge_index, x.edge_attr)
+        return logits
+
+    def critic(self, x):
+        features = self.critic_gnn(x.x, x.edge_index, x.edge_attr)
+        aggregated = self.global_attention_critic(features, x.batch)
+        return self.critic_ff(aggregated)
+

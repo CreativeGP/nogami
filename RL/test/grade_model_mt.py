@@ -13,7 +13,7 @@ from torch_geometric.data import Batch, Data
 # NOTE(cgp): あまりよくないらしいけど、ルートモジュールより上を経由するにはこうするしかないかも
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from src.util import rootdir, CustomizedSyncVectorEnv
-from src.agenv.zxopt_agent import AgentGNN
+from src.agenv.zxopt_agent import get_agent, get_agent_from_state_dict
 
 global device
 device = torch.device("cuda")
@@ -135,11 +135,7 @@ def mp_worker(loop_num, args, master):
     # envs = make_env(args.gym_id, args.seed, 0, capture_video, run_name, qubits, depth, args.gate_type)
 
     print(args)
-    agent = AgentGNN(envs, device, args).to(device)  
-
-    agent.load_state_dict(
-        torch.load(args.model, map_location=torch.device("cpu"))
-    )
+    agent = get_agent_from_state_dict(envs, device, args, torch.load(args.model, map_location=torch.device("cpu"))).to(device)
     agent.eval()
 
 

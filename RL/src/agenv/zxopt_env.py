@@ -158,8 +158,9 @@ class ZXEnvBase(gym.Env):
             new_gates = self.current_gates
             act_type = "STOP"
         
-        self.action_pattern.append([act_type, new_gates-self.current_gates])
+        self.action_pattern.append([act_type, new_gates-self.current_gates, ])
         reward = 0
+        # NOTE(cgp): エピソード中で最小のゲート数のものを出力とする
         if new_gates < self.min_gates:
             self.min_gates = new_gates
             self.final_circuit = circ            

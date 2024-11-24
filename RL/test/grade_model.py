@@ -16,7 +16,7 @@ from torch_geometric.data import Batch, Data
 # NOTE(cgp): あまりよくないらしいけど、ルートモジュールより上を経由するにはこうするしかないかも
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from src.util import rootdir, CustomizedSyncVectorEnv
-from src.agenv.zxopt_agent import AgentGNN
+from src.agenv.zxopt_agent import get_agent_from_state_dict
 
 global device
 device = torch.device("cuda")
@@ -80,11 +80,8 @@ def get_results(param):
         [make_env(args.gym_id, args.seed + i, i, capture_video, run_name, qubits, depth, args.gate_type) for i in range(args.num_envs)]
     )
 
-    agent = AgentGNN(envs, device).to(device)  
+    agent = get_agent_from_state_dict(envs, device, agent, torch.load(args.model, map_location=torch.device("cpu"))).to(device)  
 
-    agent.load_state_dict(
-        torch.load(args.model, map_location=torch.device("cpu"))
-    )
     agent.eval()
    
     done = False
