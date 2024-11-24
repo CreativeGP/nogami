@@ -658,7 +658,7 @@ def get_agent(envs, device, args, **kwargs):
 
 def get_agent_from_state_dict(envs, device, args, state_dict, **kwargs):
     agent = state_dict["agent"] if "agent" in state_dict else "original"
-    args['agent'] = agent
+    args.agent = agent
     res = get_agent(envs, device, args, **kwargs)
     res.load_state_dict(state_dict)
     return res
