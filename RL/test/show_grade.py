@@ -13,10 +13,9 @@ from torch_geometric.data import Batch, Data
 # NOTE(cgp): あまりよくないらしいけど、ルートモジュールより上を経由するにはこうするしかないかも
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from src.util import rootdir, CustomizedSyncVectorEnv
-from src.agenv.zxopt_agent import AgentGNN
+from src.agenv.zxopt_agent import get_agent_from_state_dict
 
 global device
-device = torch.device("cuda")
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -37,6 +36,8 @@ if __name__ == "__main__":
     # arguments
     if args.grading_data.endswith("/"):
         args.grading_data = args.grading_data[:-1]
+    
+    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     
     print("Grade for model: ", args.grading_data)
     print("Gate type: ", args.gate_type)
