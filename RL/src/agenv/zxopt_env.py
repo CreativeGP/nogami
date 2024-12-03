@@ -21,6 +21,18 @@ from pyzx.simplify import apply_rule, pivot
 from pyzx.symbolic import Poly
 from pyzx.utils import EdgeType, VertexType, toggle_edge
 
+class ActionHistory():
+    def __init__(self):
+        self.vs: list[int] = []
+        self.act: str = ""
+        self.gate_reduction: int = 0
+        self.reward: int = 0
+        self.V: int = 0
+        self.A: int = 0
+        self.logp: float = 0
+    
+    def __repr__(self):
+        return f"{self.act}{self.vs}(gr={self.gate_reduction}, R={self.reward}, V={self.V:.3f}, p={np.exp(self.logp):.3f})"
 
 def handler(signum, frame):
     print("Teleport Reduce Fails")
@@ -58,10 +70,7 @@ class ZXEnvBase(gym.Env):
         )
 
 
-
-    # action id = 0: STOP, 1: LC, 2: PV, 3: ID,5: GF
     def step(self, action):
-
         if int(action) == int(self.shape) * (int(self.shape) + 1) + 1:
             act_type = "STOP"
         elif int(action) > int(self.shape)**2:
@@ -92,11 +101,31 @@ class ZXEnvBase(gym.Env):
                     else:
                         act_type = "PVG"
                         self.episode_stats["pivg"] += 1
+        
+        vs = []
+        if 'act_node1' in locals():
+            vs.append(act_node1)
+        if 'act_node2' in locals():
+            vs.append(act_node2)
+        return self.manual_step(act_type, vs)
+
+
+
+    # self.graphの扱いがひどいので外部から操作する際は注意
+    def manual_step(self, act_type, vs):
+        if len(vs) == 1:
+            act_node1 = vs[0]
+        elif len(vs) == 2:
+            act_node1 = vs[0]
+            act_node2 = vs[1]
+
+
         # Update Stats
         self.render_flag = 1
         self.episode_len += 1
         reward = 0
         done = False
+        
 
         if act_type == "LC":
             
@@ -139,6 +168,8 @@ class ZXEnvBase(gym.Env):
             node = [-1]
             
        
+        # NOTE(cgp): 自己コピーでほかの参照を切ってる、それやるならapply_ruleの前でやれという気持ちもある
+        # NOTE(cgp): これは、BaseGraph.copyを呼んでるけど、このメゾットは行儀が悪くてコピーだけしてるわけじゃないことに注意
         self.graph = self.graph.copy() #Relabel nodes due to PYZX not keeping track of node id properly.
         graph = self.graph.copy()
         graph.normalize()
@@ -183,14 +214,28 @@ class ZXEnvBase(gym.Env):
         remaining_ids = len(self.match_ids())
         remaining_gadget_fusions = len(self.gadget_fusion_ids)
         remaining_actions = remaining_pivot + remaining_lcomp + remaining_ids + remaining_gadget_fusions
+        
+        history = ActionHistory()
+        history.act = act_type
+        if 'act_node1' in locals():
+            history.vs.append(act_node1)
+        if 'act_node2' in locals():
+            history.vs.append(act_node2)
+        history.gate_reduction = new_gates - self.current_gates
+        history.reward = reward
 
 
         # End episode if there are no remaining actions or Maximum Length Reached or Incorrect Action Selected
         if (
-            remaining_actions == 0 or act_type == "STOP" or self.episode_len == self.max_episode_len
+            remaining_actions == 0 or act_type == "STOP" #or self.episode_len == self.max_episode_len
         ):  
-            # NOTE(cgp): 最後に従来手法と比較して報酬を設定
+            print(min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type]), new_gates)
+            # NOTE(cgp): 重要なSTOP報酬
             reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-new_gates)/self.max_compression
+
+            history.reward = reward
+
+            self.current_gates = new_gates
             
             # RL vs PyZX Simplication -> BO, BO, Initial
             if self.min_gates < min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type]):
@@ -238,9 +283,13 @@ class ZXEnvBase(gym.Env):
                                      self.best_action_stats["id"],
                                      self.best_action_stats["gf"]],
                     "depth": self.final_circuit.depth(),
-                    "initial_depth": self.initial_depth
+                    "initial_depth": self.initial_depth,
+                    'history': history
+
                 },
             )
+
+
 
         self.current_gates = new_gates
 
@@ -258,6 +307,8 @@ class ZXEnvBase(gym.Env):
                 "lcomp_nodes": self.match_lcomp(),
                 "iden_nodes": self.match_ids(),
                 "gf_nodes": self.gadget_info_dict,
+                "circuit_data": circuit_data,
+                'history': history
             },
         )
 
@@ -577,7 +628,6 @@ class ZXEnvBase(gym.Env):
         m[0], m[1] = v0, v1
         m[2], m[3], _ = self.pivot_info_dict[(v0, v1)]
         phases = self.graph.phases()
-
         n = [set(self.graph.neighbors(m[0])), set(self.graph.neighbors(m[1]))]
         for i in range(2):
             n[i].remove(m[1 - i])  # type: ignore # Really complex typing situation
@@ -884,7 +934,12 @@ class ZXEnvBase(gym.Env):
         circuit = zx.basic_optimization(circuit).to_basic_gates()
         self.pyzx_swap_cost = 0
         return self.get_data(circuit)
-
+    
+    # 外部から操作するための関数、Envは内部でinfoを使っているので
+    def set_info(self, info):
+        self.pivot_info_dict = self.match_pivot_parallel() | self.match_pivot_boundary() | self.match_pivot_gadget()
+        self.gadget_info_dict, self.gadgets = self.match_phase_gadgets()
+        self.gadget_fusion_ids = list(self.gadget_info_dict)
 
 class ZXEnv(ZXEnvBase):
     def __init__(self, qubits, depth, gate_type, silent:bool = False):
@@ -980,6 +1035,7 @@ class ZXEnv(ZXEnvBase):
             "lcomp_nodes": match_lcomp,
             "iden_nodes": self.match_ids(),
             "gf_nodes": self.gadget_info_dict,
+            "circuit_data": circuit_data,
         }
 
 class ZXEnvForTest(ZXEnvBase):
@@ -1031,12 +1087,13 @@ class ZXEnvForTest(ZXEnvBase):
             match_lcomp = self.match_lcomp()
             self.gadget_fusion_ids = list(self.gadget_info_dict)
             actions_available = len(match_lcomp) + len(self.pivot_info_dict.keys()) + len(self.match_ids())
+            
             if actions_available == 0:
                 print("Generating new circuit")
                 raise Exception("No actions available")
             else:
                 valid_circuit = True
-            
+
             full_reduce_start = time.time()
             self.pyzx_data = self.obtain_gates_pyzx(self.g.copy())
             full_reduce_end = time.time()
@@ -1058,5 +1115,6 @@ class ZXEnvForTest(ZXEnvBase):
             "lcomp_nodes": match_lcomp,
             "iden_nodes": self.match_ids(),
             "gf_nodes": self.gadget_info_dict,
+            "circuit_data": circuit_data,
         }
 
