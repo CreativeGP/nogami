@@ -1,7 +1,4 @@
-import copy
-import random
-import signal
-import time
+import copy, random, signal, time, argparse
 
 from fractions import Fraction
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
@@ -39,9 +36,10 @@ def handler(signum, frame):
     raise Exception("end of time")
 
 class ZXEnvBase(gym.Env):
-    def __init__(self, silent: bool = False):
+    def __init__(self, silent: bool = False, args: argparse.Namespace = None):
         # self.device = "cuda"
         self.silent = silent
+        self.args = args
         self.clifford = False
         self.shape = 3000
         # d["qubits"] = circuit.qubits
@@ -229,9 +227,13 @@ class ZXEnvBase(gym.Env):
         if (
             remaining_actions == 0 or act_type == "STOP" #or self.episode_len == self.max_episode_len
         ):  
-            print(min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type]), new_gates)
             # NOTE(cgp): 重要なSTOP報酬
-            reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-new_gates)/self.max_compression
+            if self.args is not None and 'reward' in self.args and self.args.reward == 'sf':
+                # straightforward reward
+                reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-self.min_gates)/self.max_compression
+            else:
+                # 終了時のゲート数と従来手法のゲート数の差
+                reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-new_gates)/self.max_compression
 
             history.reward = reward
 
@@ -942,10 +944,10 @@ class ZXEnvBase(gym.Env):
         self.gadget_fusion_ids = list(self.gadget_info_dict)
 
 class ZXEnv(ZXEnvBase):
-    def __init__(self, qubits, depth, gate_type, silent:bool = False):
+    def __init__(self, qubits, depth, gate_type, silent:bool = False, args: argparse.Namespace = None):
         self.qubits, self.depth = qubits, depth
         self.gate_type = gate_type
-        super().__init__(silent=silent)
+        super().__init__(silent=silent, args=args)
     
     def reset(self):
         # parameters
@@ -1039,10 +1041,10 @@ class ZXEnv(ZXEnvBase):
         }
 
 class ZXEnvForTest(ZXEnvBase):
-    def __init__(self, g, gate_type, silent:bool=False):
+    def __init__(self, g, gate_type, silent:bool=False, args: argparse.Namespace=None):
         self.g = g
         self.gate_type = gate_type
-        super().__init__(silent=silent)
+        super().__init__(silent=silent, args=args)
     
     def reset(self):
         # parameters

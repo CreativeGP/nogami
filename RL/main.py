@@ -88,9 +88,11 @@ def parse_args():
 
 
     parser.add_argument("--agent", type=str, default='original', help="neural network structure")
+    parser.add_argument("--reward", type=str, default='original', help="reward structure")
 
-    # 強化学習に関係ない実装詳細のスイッチ
+    # 実装詳細のスイッチ
     parser.add_argument("--impl-light-feature", type=lambda x: bool(strtobool(x)), default=False, nargs="?",help="if toggled, the implementation details will be lightened")
+    
 
     # 追加学習用
     parser.add_argument("--checkpoint", type=str, default=None,
@@ -135,7 +137,7 @@ os.environ["TORCH_USE_CUDA_DSA"] = "1"
 
 def make_env(gym_id, seed, idx, capture_video, run_name, qubits, depth, gate_type):
     def thunk():
-        env = gym.make(gym_id, qubits=qubits, depth=depth, gate_type=gate_type)
+        env = gym.make(gym_id, qubits=qubits, depth=depth, gate_type=gate_type, args=args)
         # NOTE(cgp):
         # https://sourcegraph.com/search?q=repo:%5Egithub%5C.com/Farama-Foundation/Gymnasium%24%40v0.29.1+%22%5C%22r%5C%22%22&patternType=keyword&sm=0
         # This wrapper will keep track of cumulative rewards and episode lengths.
