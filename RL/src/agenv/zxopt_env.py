@@ -27,8 +27,9 @@ def handler(signum, frame):
     raise Exception("end of time")
 
 class ZXEnvBase(gym.Env):
-    def __init__(self):
+    def __init__(self, silent: bool = False):
         # self.device = "cuda"
+        self.silent = silent
         self.clifford = False
         self.shape = 3000
         # d["qubits"] = circuit.qubits
@@ -201,7 +202,8 @@ class ZXEnvBase(gym.Env):
             
             done = True
 
-            print("Win vs Pyzx: ", win_vs_pyzx, " Episode Gates: ", self.min_gates, "Cflow_gates: ", self.pyzx_gates, "Episode Len", self.episode_len, "Opt Episode Len", self.opt_episode_len)
+            if not self.silent:
+                print("Win vs Pyzx: ", win_vs_pyzx, " Episode Gates: ", self.min_gates, "Cflow_gates: ", self.pyzx_gates, "Episode Len", self.episode_len, "Opt Episode Len", self.opt_episode_len)
             return (
                 self.graph,
                 reward,
@@ -885,10 +887,10 @@ class ZXEnvBase(gym.Env):
 
 
 class ZXEnv(ZXEnvBase):
-    def __init__(self, qubits, depth, gate_type):
+    def __init__(self, qubits, depth, gate_type, silent:bool = False):
         self.qubits, self.depth = qubits, depth
         self.gate_type = gate_type
-        super().__init__()
+        super().__init__(silent=silent)
     
     def reset(self):
         # parameters
@@ -981,10 +983,10 @@ class ZXEnv(ZXEnvBase):
         }
 
 class ZXEnvForTest(ZXEnvBase):
-    def __init__(self, g, gate_type):
+    def __init__(self, g, gate_type, silent:bool=False):
         self.g = g
         self.gate_type = gate_type
-        super().__init__()
+        super().__init__(silent=silent)
     
     def reset(self):
         # parameters
