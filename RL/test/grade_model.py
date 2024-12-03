@@ -31,6 +31,9 @@ def parse_args():
         help="the number of episodes to run")
     parser.add_argument("--gym-id", type=str, default="zx-v0",
         help="the id of the gym environment")
+    
+    parser.add_argument("--qubit", type=int, default=-1, help="指定がなければすべてのqubitについて評価します.")
+    parser.add_argument("--depth", type=int, default=-1,)
 
     parser.add_argument("--torch-deterministic", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="if toggled, `torch.backends.cudnn.deterministic=False`")
@@ -232,6 +235,10 @@ if __name__ == "__main__":
         40: [290, 580, 875, 1165],
         80: [525,1050,1575,2100]
     }
+
+    if args.qubit != -1 and args.depth != -1:
+        qubits_depths = {args.qubit: [args.depth]}
+
     for qubit, depths in qubits_depths.items():
         fr_time_depth, rl_time_depth = [],[]
         fr_time_var, rl_time_var = [],[]

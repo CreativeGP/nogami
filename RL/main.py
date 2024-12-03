@@ -25,10 +25,6 @@ def parse_args():
         help="the name of this experiment")
     parser.add_argument("--gym-id", type=str, default="zx-v0",
         help="the id of the gym environment")
-    parser.add_argument("--checkpoint", type=str, default=None,
-        help="the path to the checkpoint file for additional training")
-    parser.add_argument("--global-step", type=int, 
-        help="the number of steps that the thc agent has already taken (required for additional training)")
     parser.add_argument("--seed", type=int, default=8983440,
         help="seed of the experiment")
     parser.add_argument("--torch-deterministic", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
@@ -95,6 +91,13 @@ def parse_args():
 
     # 強化学習に関係ない実装詳細のスイッチ
     parser.add_argument("--impl-light-feature", type=lambda x: bool(strtobool(x)), default=False, nargs="?",help="if toggled, the implementation details will be lightened")
+
+    # 追加学習用
+    parser.add_argument("--checkpoint", type=str, default=None,
+        help="the path to the checkpoint file for additional training")
+    parser.add_argument("--global-step", type=int, 
+        help="the number of steps that the thc agent has already taken (required for additional training)")
+
 
     args = parser.parse_args()
 

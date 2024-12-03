@@ -10,7 +10,6 @@ import gym
 import networkx as nx
 import numpy as np
 import pyzx as zx
-import torch
 from gym.spaces import Box, Discrete, Graph, MultiDiscrete
 from pyzx.circuit import CNOT, HAD, SWAP, Circuit
 from pyzx.extract import bi_adj, connectivity_from_biadj, greedy_reduction, id_simp, max_overlap, permutation_as_swaps

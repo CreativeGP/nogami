@@ -560,16 +560,13 @@ class AgentGNNBase(nn.Module):
         # この場合, policy_obsはtorch_geometric.data.Batchという形になる.
         # この Batch は、複数のグラフをまとめて扱うためのクラスで、これをself.actor()に入力することで、envs分のlogitsが得られる.
         # 下の方の、policy_obs.num_graphsのループで[policy_obs.batch == b]でバッチ毎に分割して処理する.
+        if not isinstance(graph,(tuple,list,np.ndarray)):
+            graph = [graph]
+            info = [info]
         if self.args is not None and 'impl_light_feature' in self.args and self.args.impl_light_feature:
-            if isinstance(graph,(tuple,list,np.ndarray)):
-                policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph2(g,i,mask_stop) for g, i in zip(graph,info)])
-            else:
-                policy_obs = self.get_policy_feature_graph2(graph,info,mask_stop)
+            policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph2(g,i,mask_stop) for g, i in zip(graph,info)])
         else:
-            if isinstance(graph,(tuple,list,np.ndarray)):
-                policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i,mask_stop) for g, i in zip(graph,info)])
-            else:
-                policy_obs = self.get_policy_feature_graph(graph,info,mask_stop)
+            policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i,mask_stop) for g, i in zip(graph,info)])
 
     
         # for g, i in zip(graph,info):

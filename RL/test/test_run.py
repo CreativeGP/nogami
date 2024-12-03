@@ -14,7 +14,7 @@ import torch
 from torch_geometric.data import Batch, Data
 
 # NOTE(cgp): あまりよくないらしいけど、ルートモジュールより上を経由するにはこうするしかないかも
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.util import rootdir, CustomizedSyncVectorEnv
 from src.agenv.zxopt_agent import get_agent_from_state_dict
 
@@ -25,7 +25,7 @@ def parse_args():
 
     # parser.add_argument("--model", type=str, default="/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_104448_zx-v0__main__8983440__1726934959_model5x70_gates_new.pt")
     parser.add_argument("--model", type=str, default="/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_5369856_zx-v0__training2-with-vtargetvar-add__8983440__1730560905.pt")
-    parser.add_argument("--cliffordT", type=int, nargs=2, default=None, help="two integers for Clifford+T optimization")
+    parser.add_argument("--cliffordT", type=int, nargs=2, default=[5,55], help="two integers for Clifford+T optimization")
     # parser.add_argument("--qasm", type=str, default="")
     parser.add_argument("--qasm", type=str, default=None,)#default="/home/wsl/Research/nogami/zx/qasm/mod_adder_1024.qasm")
     parser.add_argument("-n", type=int, default=1, help="number of circuits")
