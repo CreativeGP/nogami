@@ -99,7 +99,7 @@ class PPO():
         print(f"Run start: {self.run_name}")
 
 
-        NUM_UPDATES = 100000
+        NUM_UPDATES = 2048
         for update in range(self.start_update, NUM_UPDATES):
             if update % 10 == 1:
                 state_dict = self.agent.state_dict()
