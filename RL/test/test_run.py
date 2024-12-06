@@ -154,7 +154,7 @@ def get_results(agent,i):
     count = 0
     while not done:
         action, logp, entropy, action_logits, action_id = agent.get_next_action(state, info, device=device, mask_stop=args.stop_at > 0)
-        value = agent.get_value(state)
+        value = agent.get_value(state, info)
         action = action.flatten()
         if args.stop_at > 0 and count >= args.stop_at:
             # 強制終了

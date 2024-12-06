@@ -12,7 +12,7 @@ from distutils.util import strtobool
 from torch_geometric.data import Batch, Data
 
 
-from src.util import Logger, Timer, rootdir, count_autograd_graph
+from src.util import Logger, Timer, rootdir, count_autograd_graph, for_minibatches
 from src.training_method.trajectory import Trajectory
 
 class PPO():
@@ -160,18 +160,12 @@ class PPO():
         print(np.count_nonzero(self.traj.rewards.cpu().numpy() < -0.1))
 
         # Optimizing the policy and value network
-        b_inds = np.arange(self.args.batch_size)  
         clipfracs = []
         print("Epoch loop started:", self.args.update_epochs, "epochs in total.")
         for epoch in range(self.args.update_epochs):
             self.timer.start()
-            np.random.shuffle(b_inds)  
 
-            for start in range(
-                0, self.args.batch_size, self.args.minibatch_size
-            ):  # loop over entire batch, one minibatch at the time
-                end = start + self.args.minibatch_size
-                mb_inds = b_inds[start:end]
+            for mb_inds in for_minibatches(self.args.batch_size, self.args.minbatch_size):  # loop over entire batch, one minibatch at the time
                 states_batch = [self.traj.states[i] for i in mb_inds]
                 infos_batch = [self.traj.infos[i] for i in mb_inds]
                 # バッチでとってきたものの一つ先を見る
@@ -180,7 +174,7 @@ class PPO():
                     infos_batch,
                     self.traj.b_actions.long()[mb_inds].T, device=self.device
                 )
-                newvalue = self.agent.get_value(states_batch)
+                newvalue = self.agent.get_value(states_batch, infos_batch)
                 logratio = newlogprob - self.traj.b_logprobs[mb_inds]  # logratio = log(newprob/oldprob)
                 ratio = logratio.exp()
 

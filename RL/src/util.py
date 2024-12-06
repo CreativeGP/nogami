@@ -175,3 +175,11 @@ def all_memory_usage(thres=1e6):
             print(size, inspect.getmembers(obj) )
 
     print(f"Memory usage: {memsum} bytes")
+
+
+# get random shuffled minibatches
+def for_minibatches(batch_size, minibatch_size):
+    b_inds = np.arange(batch_size)
+    np.random.shuffle(b_inds)  
+    for start in range(0, batch_size, minibatch_size):
+        yield b_inds[start:start + minibatch_size]

@@ -625,7 +625,7 @@ class AgentGNNBase(nn.Module):
         entropy = categoricals.entropy()
         return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device)
 
-    def get_value(self, graph):
+    def get_value(self, graph, info):
         if self.args is not None and 'impl_light_feature' in self.args and  self.args.impl_light_feature:
             if isinstance(graph,(tuple,list)):
                 value_obs = torch_geometric.data.Batch.from_data_list([self.get_value_feature_graph2(g) for g in graph])
@@ -642,6 +642,15 @@ class AgentGNNBase(nn.Module):
                 value_obs = torch_geometric.data.Batch.from_data_list([self.get_value_feature_graph(g) for g in graph])
             else:
                 value_obs = self.get_value_feature_graph(graph)
+            
+        if 'agent' in self.args and self.args.agent == 'shared':
+            if not isinstance(graph,(tuple,list,np.ndarray)):
+                graph = [graph]
+                info = [info]
+            if self.args is not None and 'impl_light_feature' in self.args and self.args.impl_light_feature:
+                value_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph2(g,i,mask_stop=False) for g, i in zip(graph,info)])
+            else:
+                value_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i,mask_stop=False) for g, i in zip(graph,info)])
         values = self.critic(value_obs)
         values = values.squeeze(-1)
         return values# 
@@ -650,13 +659,16 @@ class AgentGNNBase(nn.Module):
 def get_agent(envs, device, args, **kwargs):
     if args.agent == "original":
         return AgentGNN1(envs, device, args, **kwargs)
-    elif args.agent == "parameter-shared":
+    elif args.agent == "shared":
         return AgentGNN2(envs, device, args, **kwargs)
 
 def get_agent_from_state_dict(envs, device, args, state_dict, **kwargs):
     agent = state_dict["agent"] if "agent" in state_dict else "original"
     args.agent = agent
     res = get_agent(envs, device, args, **kwargs)
+    # load_state_dictは変なキーがあるとエラーを吐くので削除
+    if "agent" in state_dict:
+        del state_dict["agent"]
     res.load_state_dict(state_dict)
     return res
 class AgentGNN1(AgentGNNBase):
@@ -801,47 +813,6 @@ class AgentGNN2(AgentGNNBase):
         c_in_v = 11
         edge_dim = 6
         edge_dim_v = 3
-        self.global_attention_critic = geom_nn.GlobalAttention(
-            gate_nn=nn.Sequential(
-                nn.Linear(c_hidden, c_hidden),
-                nn.ReLU(),
-                nn.Linear(c_hidden, c_hidden),
-                nn.ReLU(),
-                nn.Linear(c_hidden, 1),
-            ),
-            nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
-        )
-
-        self.critic_gnn = geo_Sequential(
-            "x, edge_index, edge_attr",
-            [
-                (
-                    geom_nn.GATv2Conv(c_in_v, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-            ],
-        )
 
         self.actor_gnn = geom_nn.Sequential(
             "x, edge_index, edge_attr",
@@ -871,14 +842,27 @@ class AgentGNN2(AgentGNNBase):
                     "x, edge_index, edge_attr -> x",
                 ),
                 nn.ReLU(),
-                (nn.Linear(c_hidden, c_hidden),),
-                nn.ReLU(),
-                (nn.Linear(c_hidden, 1),),
             ],
         )
 
-        self.critic_ff = nn.Sequential(
-            nn.Linear(c_hidden_v, c_hidden_v),
+        self.actor_head = nn.Sequential(
+            nn.Linear(c_hidden, c_hidden),
+            nn.ReLU(),
+            nn.Linear(c_hidden, 1),
+        )
+
+        self.critic_head = nn.Sequential(
+            geom_nn.GlobalAttention(
+                gate_nn=nn.Sequential(
+                    nn.Linear(c_hidden, c_hidden),
+                    nn.ReLU(),
+                    nn.Linear(c_hidden, c_hidden),
+                    nn.ReLU(),
+                    nn.Linear(c_hidden, 1),
+                ),
+                nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
+            ),
+                        nn.Linear(c_hidden_v, c_hidden_v),
             nn.ReLU(),
             nn.Linear(c_hidden_v, c_hidden_v),
             nn.ReLU(),
@@ -886,11 +870,14 @@ class AgentGNN2(AgentGNNBase):
         )
 
     def actor(self, x):
-        logits = self.actor_gnn(x.x, x.edge_index, x.edge_attr)
+        logits = self.actor_head(self.actor_gnn(x.x, x.edge_index, x.edge_attr))
         return logits
 
     def critic(self, x):
-        features = self.critic_gnn(x.x, x.edge_index, x.edge_attr)
-        aggregated = self.global_attention_critic(features, x.batch)
-        return self.critic_ff(aggregated)
+        # features = self.critic_gnn(x.x, x.edge_index, x.edge_attr)
+        # aggregated = self.global_attention_critic(features, x.batch)
+        # return self.critic_ff(aggregated)
+        # NOTE(cgp): x.batchはいらない？
+        values = self.critic_head(self.actor_gnn(x.x, x.edge_index, x.edge_attr))
+        return values
 

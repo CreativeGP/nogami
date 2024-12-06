@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument("-n", type=int, default=-1,)
     parser.add_argument("--use-space", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,)
     parser.add_argument("--verbose", "-v", action="store_true", help="Increase output verbosity")
+    parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,)
     return parser.parse_known_args()[0]
 
 import json

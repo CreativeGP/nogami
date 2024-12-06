@@ -48,7 +48,7 @@ class Trajectory():
             with torch.no_grad():
                 action, logprob, _, logits, action_ids = self.agent.get_next_action(self.next_s, self.next_info, device=self.device)
                 if self.collect_value:
-                    self.values[step] = self.agent.get_value(self.next_s).flatten()
+                    self.values[step] = self.agent.get_value(self.next_s, self.next_info).flatten()
             self.actions[step] = action
             self.logprobs[step] = logprob
 
