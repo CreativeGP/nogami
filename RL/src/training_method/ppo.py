@@ -108,6 +108,7 @@ class PPO():
             if self.args.anneal_lr:
                 frac = max(1.0 / 100, 1.0 - (update - 1.0) / (NUM_UPDATES * 5.0 / 6))
                 lrnow = frac * self.args.learning_rate
+                print(lrnow)
                 self.optimizer.param_groups[0]["lr"] = lrnow
                 neg_reward_discount = max(1, 5 * (1 - 4 * update / NUM_UPDATES))
             if update * 1.0 / NUM_UPDATES > 5.0 / 6:
@@ -165,16 +166,15 @@ class PPO():
         for epoch in range(self.args.update_epochs):
             self.timer.start()
 
-            for mb_inds in for_minibatches(self.args.batch_size, self.args.minbatch_size):  # loop over entire batch, one minibatch at the time
+            for mb_inds in for_minibatches(self.args.batch_size, self.args.minibatch_size):  # loop over entire batch, one minibatch at the time
                 states_batch = [self.traj.states[i] for i in mb_inds]
                 infos_batch = [self.traj.infos[i] for i in mb_inds]
-                # バッチでとってきたものの一つ先を見る
+                # バッチでとってきたものの一つ先を見る, actionを指定しておくことでlogprobを取る
                 _, newlogprob, entropy, logits, _ = self.agent.get_next_action(
                     states_batch,
                     infos_batch,
-                    self.traj.b_actions.long()[mb_inds].T, device=self.device
+                    action=self.traj.b_actions.long()[mb_inds].T, device=self.device
                 )
-                newvalue = self.agent.get_value(states_batch, infos_batch)
                 logratio = newlogprob - self.traj.b_logprobs[mb_inds]  # logratio = log(newprob/oldprob)
                 ratio = logratio.exp()
 
@@ -194,6 +194,7 @@ class PPO():
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
+                newvalue = self.agent.get_value(states_batch, infos_batch)
                 newvalue = newvalue.view(-1)
                 if self.args.clip_vloss:
                     v_loss_unclipped = (newvalue - self.traj.b_returns[mb_inds]) ** 2
@@ -291,24 +292,7 @@ class PPO():
         self.logger.write_mean('charts/swap_gates', 'swap_gates', self.traj.global_step)
         self.logger.write_mean('charts/pyzx_swap_gates', 'pyzx_swap_gates', self.traj.global_step)
 
-        policy_weights = []
-        value_weights = []
-        for param in self.agent.actor_gnn.parameters():
-            policy_weights.extend(param.cpu().detach().numpy().flatten())
-        for param in self.agent.critic_gnn.parameters():
-            value_weights.extend(param.cpu().detach().numpy().flatten())
-        self.logger.writer.add_scalar('weights/policy_weights_mean', np.mean(policy_weights), self.traj.global_step)
-        self.logger.writer.add_scalar('weights/policy_weights_std', np.std(policy_weights), self.traj.global_step)
-        self.logger.writer.add_scalar('weights/value_weights_mean', np.mean(value_weights), self.traj.global_step)
-        self.logger.writer.add_scalar('weights/value_weights_std', np.std(value_weights), self.traj.global_step)
-        
-        total_weights = 0
-        total_elements = 0
-        for param in self.agent.critic_gnn.parameters():
-            total_weights += param.sum()
-            total_elements += param.numel()
-        weights_mean = total_weights / total_elements
-        self.logger.writer.add_scalar('charts/critic_weights_mean', weights_mean, self.traj.global_step)
+        self.agent.write_weight_logs(self.logger, self.traj.global_step)
 
         self.logger.write_histogram('histograms/reward_distribution', 'cumulative_reward', self.traj.global_step)
         self.logger.writer.add_histogram('histograms/step_reward_distribution', np.array(self.traj.b_rewards.cpu()), self.traj.global_step)

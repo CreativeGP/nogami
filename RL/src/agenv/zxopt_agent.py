@@ -11,7 +11,7 @@ from torch_geometric.nn import Sequential as geo_Sequential
 import networkx as nx
 from memory_profiler import profile
 
-
+from src.util import Logger
 
 # torch.distributions.categoricalを継承して、
 class CategoricalMasked(Categorical):
@@ -655,6 +655,9 @@ class AgentGNNBase(nn.Module):
         values = values.squeeze(-1)
         return values# 
 
+    def write_weight_logs(self, logger: Logger, global_step: int):
+        pass
+
 
 def get_agent(envs, device, args, **kwargs):
     if args.agent == "original":
@@ -788,6 +791,26 @@ class AgentGNN1(AgentGNNBase):
         aggregated = self.global_attention_critic(features, x.batch)
         return self.critic_ff(aggregated)
 
+    def write_weight_logs(self, logger: Logger, global_step: int):
+        policy_weights = []
+        value_weights = []
+        for param in self.actor_gnn.parameters():
+            policy_weights.extend(param.cpu().detach().numpy().flatten())
+        for param in self.critic_gnn.parameters():
+            value_weights.extend(param.cpu().detach().numpy().flatten())
+        logger.writer.add_scalar('weights/policy_weights_mean', np.mean(policy_weights), global_step)
+        logger.writer.add_scalar('weights/policy_weights_std', np.std(policy_weights), global_step)
+        logger.writer.add_scalar('weights/value_weights_mean', np.mean(value_weights), global_step)
+        logger.writer.add_scalar('weights/value_weights_std', np.std(value_weights), global_step)
+        
+        total_weights = 0
+        total_elements = 0
+        for param in self.critic_gnn.parameters():
+            total_weights += param.sum()
+            total_elements += param.numel()
+        weights_mean = total_weights / total_elements
+        logger.writer.add_scalar('charts/critic_weights_mean', weights_mean, global_step)
+
 # Parameter Shared: Actor and Critic share the same GNN
 class AgentGNN2(AgentGNNBase):
     def __init__(
@@ -880,4 +903,18 @@ class AgentGNN2(AgentGNNBase):
         # NOTE(cgp): x.batchはいらない？
         values = self.critic_head(self.actor_gnn(x.x, x.edge_index, x.edge_attr))
         return values
+
+    def write_weight_logs(self, logger: Logger, global_step: int):
+        logs = {
+            'policy': self.actor_gnn, # ほんとはgnnみたいな名前がいいけど、AgentGNN1との整合性のため
+            'actor_head': self.actor_head,
+            'critic_head': self.critic_head,
+        }
+
+        for name, model in logs.items():
+            weights = []
+            for param in model.parameters():
+                weights.extend(param.cpu().detach().numpy().flatten())
+            logger.writer.add_scalar(f'weights/{name}_weights_mean', np.mean(weights), global_step)
+            logger.writer.add_scalar(f'weights/{name}_weights_std', np.std(weights), global_step)
 
