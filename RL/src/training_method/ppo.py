@@ -161,12 +161,18 @@ class PPO():
         print(np.count_nonzero(self.traj.rewards.cpu().numpy() < -0.1))
 
         # Optimizing the policy and value network
+        b_inds = np.arange(self.args.batch_size)  
         clipfracs = []
         print("Epoch loop started:", self.args.update_epochs, "epochs in total.")
         for epoch in range(self.args.update_epochs):
             self.timer.start()
+            np.random.shuffle(b_inds)  
 
-            for mb_inds in for_minibatches(self.args.batch_size, self.args.minibatch_size):  # loop over entire batch, one minibatch at the time
+            for start in range(
+                0, self.args.batch_size, self.args.minibatch_size
+            ):  # loop over entire batch, one minibatch at the time
+                end = start + self.args.minibatch_size
+                mb_inds = b_inds[start:end]
                 states_batch = [self.traj.states[i] for i in mb_inds]
                 infos_batch = [self.traj.infos[i] for i in mb_inds]
                 # バッチでとってきたものの一つ先を見る, actionを指定しておくことでlogprobを取る
