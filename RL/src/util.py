@@ -178,8 +178,28 @@ def all_memory_usage(thres=1e6):
 
 
 # get random shuffled minibatches
+# originalと若干実装が異なるが、PPGは完全一致はできないからいいのでは
 def for_minibatches(batch_size, minibatch_size):
     b_inds = np.arange(batch_size)
     np.random.shuffle(b_inds)  
     for start in range(0, batch_size, minibatch_size):
         yield b_inds[start:start + minibatch_size]
+
+
+# for register_forward_hook
+def grad_statistics(model, inputs, outputs):
+    print(model.__class__.__name__)
+    print("outputs", outputs[0].flatten().mean(), outputs[0].flatten().std())
+    print("inputs", inputs[0].flatten().mean(), inputs[0].flatten().std())
+    # print(model, inputs, outputs)
+
+def print_weight_summary(model):
+    print("Weights for ", model.__class__.__name__)
+    for name, param in model.named_parameters():
+        s = str(list(param.data.shape))
+        print(f"{name:<50} {s:<10} μ={param.data.mean().item():.3f}\tstd={param.data.std().item():.3f}")
+
+def print_weights(model, tag:str):
+    for name, param in model.named_parameters():
+        if name == tag:
+            print(param.data)
