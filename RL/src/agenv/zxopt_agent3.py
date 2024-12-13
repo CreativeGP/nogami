@@ -420,8 +420,8 @@ class AgentGNN3(AgentGNNBase):
             weights = []
             for param in model.parameters():
                 weights.extend(param.cpu().detach().numpy().flatten())
-            logger.writer.add_scalar(f'weights/{name}_weights_mean', np.mean(weights), global_step)
-            logger.writer.add_scalar(f'weights/{name}_weights_std', np.std(weights), global_step)
+            logger.write_scalar(f'weights/{name}_weights_mean', np.mean(weights), global_step)
+            logger.write_scalar(f'weights/{name}_weights_std', np.std(weights), global_step)
 
 
     

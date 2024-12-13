@@ -89,6 +89,7 @@ def parse_args():
 
     parser.add_argument("--agent", type=str, default='original', help="neural network structure")
     parser.add_argument("--reward", type=str, default='original', help="reward structure")
+    parser.add_argument("--training", type=str, default='ppo', help="training method")
 
     # 実装詳細のスイッチ
     parser.add_argument("--impl-light-feature", type=lambda x: bool(strtobool(x)), default=False, nargs="?",help="if toggled, the implementation details will be lightened")
@@ -172,6 +173,7 @@ print("__name__", __name__)
 
 if __name__ == "__main__":
     from src.training_method.ppo import PPO
+    from src.training_method.ppg import PPG
     from src.agenv.zxopt_agent import get_agent
     from src.util import CustomizedAsyncVectorEnv, CustomizedSyncVectorEnv
 
@@ -213,9 +215,13 @@ if __name__ == "__main__":
             torch.load(args.checkpoint, map_location=torch.device("cpu"))
         )
 
-    ppo = PPO(envs, agent, args, run_name)
+    if 'training' in args and args.training == 'ppg':
+        ppg = PPG(envs, agent, args, run_name)
+        ppg.run()
+    else:
+        ppo = PPO(envs, agent, args, run_name)
+        ppo.run()
 
-    ppo.run()
        
 
 

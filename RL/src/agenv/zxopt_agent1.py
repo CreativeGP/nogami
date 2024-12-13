@@ -136,10 +136,10 @@ class AgentGNN1(AgentGNNBase):
             policy_weights.extend(param.cpu().detach().numpy().flatten())
         for param in self.critic_gnn.parameters():
             value_weights.extend(param.cpu().detach().numpy().flatten())
-        logger.writer.add_scalar('weights/policy_weights_mean', np.mean(policy_weights), global_step)
-        logger.writer.add_scalar('weights/policy_weights_std', np.std(policy_weights), global_step)
-        logger.writer.add_scalar('weights/value_weights_mean', np.mean(value_weights), global_step)
-        logger.writer.add_scalar('weights/value_weights_std', np.std(value_weights), global_step)
+        logger.write_scalar('weights/policy_weights_mean', np.mean(policy_weights), global_step)
+        logger.write_scalar('weights/policy_weights_std', np.std(policy_weights), global_step)
+        logger.write_scalar('weights/value_weights_mean', np.mean(value_weights), global_step)
+        logger.write_scalar('weights/value_weights_std', np.std(value_weights), global_step)
         
         total_weights = 0
         total_elements = 0
@@ -147,7 +147,7 @@ class AgentGNN1(AgentGNNBase):
             total_weights += param.sum()
             total_elements += param.numel()
         weights_mean = total_weights / total_elements
-        logger.writer.add_scalar('charts/critic_weights_mean', weights_mean, global_step)
+        logger.write_scalar('charts/critic_weights_mean', weights_mean, global_step)
 
         self.detailed_weight_logs(logger, global_step)
 

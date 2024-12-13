@@ -62,7 +62,7 @@ class Timer:
         return self.__str__()
 
 class Logger():
-    def __init__(self, run_name, args):
+    def __init__(self, run_name, args, use_wandb=False):
         import torch.utils.tensorboard
 
         self.run_name = run_name
@@ -70,21 +70,44 @@ class Logger():
         self.writer = torch.utils.tensorboard.SummaryWriter(rootdir(f"/runs/{run_name}"))
         self.data = {}
 
+        if use_wandb:
+            import wandb
+            wandb.login(key='07513fa9ea56e3b37748d95ff8c09a39650e397b')
+            wandb.init(project="zxrl", name=run_name, config=vars(args), )
+            self.use_wandb = True
+
         self.writer.add_text(
             "hyperparameters",
             "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
         )
         self.writer.add_text("hostname", gethostname())
+
+    def write_scalar(self, title, value, global_step, only_wandb=False):
+        if not only_wandb:
+            self.writer.add_scalar(title, value, global_step)
+        if self.use_wandb:
+            import wandb
+            wandb.log({title: value}, step=global_step)
     
     # helper function to write data
-    def write_mean(self, title, key, global_step):
-        self.writer.add_scalar(title, sum(self.data[key]) / len(self.data[key]), global_step)
+    def write_mean(self, title, key, global_step, only_wandb=False):
+        m = sum(self.data[key]) / len(self.data[key])
+        if not only_wandb:
+            self.writer.add_scalar(title, m, global_step)
+        if self.use_wandb:
+            import wandb
+            wandb.log({title: m}, step=global_step)
 
     def write_histogram(self, title, key, global_step):
         self.writer.add_histogram(title, np.array(self.data[key]), global_step)
+
+        # wandb does not support histogram
     
     def close(self):
         self.writer.close()
+        if self.use_wandb:
+            import wandb
+            wandb.finish()
 
 
 # NOTE(cgp): infoの扱いがちょっと面倒なので、ちゃんとarrayを返すようにした.

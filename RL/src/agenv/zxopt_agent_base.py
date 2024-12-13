@@ -74,5 +74,6 @@ class AgentGNNBase(nn.Module):
     def detailed_weight_logs(self, logger: Logger, global_step: int):
         for name, param in self.named_parameters():
             pascal_name = name.replace('.', '_')
-            logger.writer.add_scalar(f'detailed_weights/{pascal_name}_mean', param.data.mean().item(), global_step)
-            logger.writer.add_scalar(f'detailed_weights/{pascal_name}_std', param.data.std().item(), global_step)
+            # バカみたいに多いのでwandbのみ出力
+            logger.write_scalar(f'detailed_weights/{pascal_name}_mean', param.data.mean().item(), global_step, only_wandb=True)
+            logger.write_scalar(f'detailed_weights/{pascal_name}_std', param.data.std().item(), global_step, only_wandb=True)
