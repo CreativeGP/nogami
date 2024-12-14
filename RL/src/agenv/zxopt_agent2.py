@@ -70,18 +70,19 @@ class AgentGNN2(AgentGNNBase):
             nn.Linear(c_hidden, 1),
         )
 
-        self.critic_head = nn.Sequential(
-            geom_nn.GlobalAttention(
-                gate_nn=nn.Sequential(
-                    nn.Linear(c_hidden, c_hidden),
-                    nn.ReLU(),
-                    nn.Linear(c_hidden, c_hidden),
-                    nn.ReLU(),
-                    nn.Linear(c_hidden, 1),
-                ),
-                nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
+        self.critic_head_aggregation = geom_nn.GlobalAttention(
+            gate_nn=nn.Sequential(
+                nn.Linear(c_hidden, c_hidden),
+                nn.ReLU(),
+                nn.Linear(c_hidden, c_hidden),
+                nn.ReLU(),
+                nn.Linear(c_hidden, 1),
             ),
-                        nn.Linear(c_hidden_v, c_hidden_v),
+            nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
+        )
+
+        self.critic_head = nn.Sequential(
+            nn.Linear(c_hidden_v, c_hidden_v),
             nn.ReLU(),
             nn.Linear(c_hidden_v, c_hidden_v),
             nn.ReLU(),
@@ -97,7 +98,11 @@ class AgentGNN2(AgentGNNBase):
         # aggregated = self.global_attention_critic(features, x.batch)
         # return self.critic_ff(aggregated)
         # NOTE(cgp): x.batchはいらない？
-        values = self.critic_head(self.actor_gnn(x.x, x.edge_index, x.edge_attr))
+        values = self.critic_head(
+            self.critic_head_aggregation(
+                self.actor_gnn(x.x, x.edge_index, x.edge_attr),
+                batch=x.batch,
+            ))
         return values
 
     def write_weight_logs(self, logger: Logger, global_step: int):
