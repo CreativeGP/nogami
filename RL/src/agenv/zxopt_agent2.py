@@ -114,6 +114,7 @@ class AgentGNN2(AgentGNNBase):
             logger.write_scalar(f'weights/{name}_weights_mean', np.mean(weights), global_step)
             logger.write_scalar(f'weights/{name}_weights_std', np.std(weights), global_step)
         self.detailed_weight_logs(logger, global_step)
+        self.detailed_grad_logs(logger, global_step)
     
     # zxdiagramから(node_features, edge_index, edge_features、identifier)を作成して、torch.tensorで返す
     # node_features: [位相情報18個, 入力境界？, 出力境界？, フェーズガジェット？, 行動用ノードのための情報...]

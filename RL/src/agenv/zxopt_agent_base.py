@@ -77,3 +77,10 @@ class AgentGNNBase(nn.Module):
             # バカみたいに多いのでwandbのみ出力
             logger.write_scalar(f'detailed_weights/{pascal_name}_mean', param.data.mean().item(), global_step, only_wandb=True)
             logger.write_scalar(f'detailed_weights/{pascal_name}_std', param.data.std().item(), global_step, only_wandb=True)
+    
+    def detailed_grad_logs(self, logger: Logger, global_step: int):
+        for name, param in self.named_parameters():
+            pascal_name = name.replace('.', '_')
+            if param.grad is not None:
+                logger.write_scalar(f'detailed_grads/{pascal_name}_mean', param.grad.abs().mean().item(), global_step, only_wandb=True)
+                logger.write_scalar(f'detailed_grads/{pascal_name}_std', param.grad.abs().std().item(), global_step, only_wandb=True)
