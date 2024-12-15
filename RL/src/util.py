@@ -76,11 +76,27 @@ class Logger():
             wandb.init(project="zxrl", name=run_name, config=vars(args), )
             self.use_wandb = True
 
-        self.writer.add_text(
-            "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
+        
+        self.write_dict("hyperparameters", vars(args))
+        # self.writer.add_text(
+        #     "hyperparameters",
+        #     "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
+        # )
+        self.write_text("hostname", gethostname())
+        # self.writer.add_text("hostname", gethostname())
+
+    def write_text(self, title, text):
+        self.writer.add_text(title, text)
+        if self.use_wandb:
+            import wandb
+            wandb.config[title] = text
+    
+    def write_dict(self, title:str, d:dict):
+        self.writer.add_text(title, "|key|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in d.items()]))
         )
-        self.writer.add_text("hostname", gethostname())
+        if self.use_wandb:
+            import wandb
+            wandb.config[title] = d
 
     def write_scalar(self, title, value, global_step, only_wandb=False):
         if not only_wandb:
