@@ -54,8 +54,7 @@ def get_agent(envs, device, args, **kwargs):
     if type(args) == argparse.Namespace:
         agent = args.agent
     else:
-        agent = args['agent'
-                ]
+        agent = args['agent']
     print("opening agent:", agent)
     if agent == "original":
         return AgentGNN1(envs, device, args, **kwargs)

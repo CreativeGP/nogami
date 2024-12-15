@@ -229,14 +229,19 @@ class PPG(PPO):
         B_infos = np.array([sample.info for sample in self.B])
         B_values = np.array([sample.value for sample in self.B])
         B_qs = np.array([sample.qvalue for sample in self.B])
-        # 現在のπで計算
-        _,  B_logpprob, _, _, _ = self.agent.get_next_action(
-            B_states,
-            B_infos,
-            action=None,
-            device=self.device
-        )
-        B_logpprob = B_logpprob.detach()
+
+        B_logprob = np.array([])
+        for inds in np.array_split(np.arange(len(self.B)), len(self.B) // self.args.minibatch_size + 1):
+            # 現在のπで計算
+            _,  _B_logprob, _, _, _ = self.agent.get_next_action(
+                B_states[inds],
+                B_infos[inds],
+                action=None,
+                device=self.device
+            )
+            B_logprob = np.concatenate([B_logprob, _B_logprob.detach().numpy()])
+        print(B_logprob.shape, B_logprob)
+        B_logprob = torch.Tensor(B_logprob)
 
         for _ in range(self.config["aux_epochs"]):
             for mb_inds in for_minibatches(len(self.B), self.args.minibatch_size):
@@ -269,7 +274,7 @@ class PPG(PPO):
                     L_aux = 0.5 * ((newvalue - qs_batch) ** 2).mean()
 
                 # TODO: ここの計算は確率分布からやるので大変、いくつかやり方があるけど一番簡単なモンテカルロ推定でとりあえずやってみる
-                logratio = newlogprob - B_logpprob[mb_inds]
+                logratio = newlogprob - B_logprob[mb_inds]
                 ratio = logratio.exp()
                 old_kl = (-logratio).mean()
                 new_kl = ((ratio - 1) - logratio).mean() # スパイクたちがち
@@ -303,7 +308,7 @@ class PPG(PPO):
                     L_value = 0.5 * v_loss_max.mean()
                 else:
                     L_value = 0.5 * ((newvalue - qs_batch) ** 2).mean()
-                print("L_value", L_joint.item(), L_aux.item(), self.config["β_clone"]*L_kl.item())
+                print("L_value", L_value)
 
                 self.optimizer.param_groups[0]["lr"] = self.lr_aux_value
                 self.optimizer.zero_grad()

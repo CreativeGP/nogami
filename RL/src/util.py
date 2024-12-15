@@ -69,12 +69,13 @@ class Logger():
         self.args = args
         self.writer = torch.utils.tensorboard.SummaryWriter(rootdir(f"/runs/{run_name}"))
         self.data = {}
+        
+        self.use_wandb = use_wandb
 
         if use_wandb:
             import wandb
             wandb.login(key='07513fa9ea56e3b37748d95ff8c09a39650e397b')
             wandb.init(project="zxrl", name=run_name, config=vars(args), )
-            self.use_wandb = True
 
         
         self.write_dict("hyperparameters", vars(args))
