@@ -104,7 +104,8 @@ class AgentGNN3(AgentGNNBase):
             nn.Linear(c_hidden, 1),
         )
 
-        self.critic_head_aggregation = geom_nn.GlobalAttention(
+        # for critic gnn
+        self.critic_head1_aggregation = geom_nn.GlobalAttention(
             gate_nn=nn.Sequential(
                 nn.Linear(c_hidden, c_hidden),
                 nn.ReLU(),
@@ -115,7 +116,26 @@ class AgentGNN3(AgentGNNBase):
             nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
         )
 
-        self.critic_head = nn.Sequential(
+        self.critic_head1 = nn.Sequential(
+            nn.Linear(c_hidden_v, c_hidden_v),
+            nn.ReLU(),
+            nn.Linear(c_hidden_v, c_hidden_v),
+            nn.ReLU(),
+            nn.Linear(c_hidden_v, out_features=1),
+        )
+        # for actor gnn
+        self.critic_head2_aggregation = geom_nn.GlobalAttention(
+            gate_nn=nn.Sequential(
+                nn.Linear(c_hidden, c_hidden),
+                nn.ReLU(),
+                nn.Linear(c_hidden, c_hidden),
+                nn.ReLU(),
+                nn.Linear(c_hidden, 1),
+            ),
+            nn=nn.Sequential(nn.Linear(c_hidden, c_hidden_v), nn.ReLU(), nn.Linear(c_hidden_v, c_hidden_v), nn.ReLU()),
+        )
+
+        self.critic_head2 = nn.Sequential(
             nn.Linear(c_hidden_v, c_hidden_v),
             nn.ReLU(),
             nn.Linear(c_hidden_v, c_hidden_v),
@@ -132,8 +152,8 @@ class AgentGNN3(AgentGNNBase):
         # aggregated = self.global_attention_critic(features, x.batch)
         # return self.critic_ff(aggregated)
         # NOTE(cgp): x.batchはいらない？
-        values = self.critic_head(
-            self.critic_head_aggregation(
+        values = self.critic_head1(
+            self.critic_head1_aggregation(
                 self.critic_gnn(x.x, x.edge_index, x.edge_attr),
                 batch=x.batch))
         return values
@@ -209,8 +229,8 @@ class AgentGNN3(AgentGNNBase):
         policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i,mask_stop=True) for g, i in zip(graph,info)])
 
             
-        values = self.critic_head(
-            self.critic_head_aggregation(
+        values = self.critic_head1(
+            self.critic_head1_aggregation(
                 self.critic_gnn(policy_obs.x, policy_obs.edge_index, policy_obs.edge_attr)
                 , batch=policy_obs.batch))
         values = values.squeeze(-1)
@@ -222,8 +242,8 @@ class AgentGNN3(AgentGNNBase):
             info = [info]
         policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i,mask_stop=True) for g, i in zip(graph,info)])
             
-        values = self.critic_head(
-            self.critic_head_aggregation(
+        values = self.critic_head2(
+            self.critic_head2_aggregation(
                 self.critic_gnn(policy_obs.x, policy_obs.edge_index, policy_obs.edge_attr)
                 , batch=policy_obs.batch))
         values = values.squeeze(-1)
@@ -413,7 +433,8 @@ class AgentGNN3(AgentGNNBase):
             'policy': self.actor_gnn, # ほんとはgnnみたいな名前がいいけど、AgentGNN1との整合性のため
             'critic': self.critic_gnn, # ほんとはgnnみたいな名前がいいけど、AgentGNN1との整合性のため
             'actor_head': self.actor_head,
-            'critic_head': self.critic_head,
+            'critic_headv': self.critic_head1,
+            'critic_headp': self.critic_head2,
         }
 
         for name, model in logs.items():

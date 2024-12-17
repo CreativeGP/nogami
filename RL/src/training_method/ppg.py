@@ -243,6 +243,7 @@ class PPG(PPO):
         print(B_logprob.shape, B_logprob)
         B_logprob = torch.Tensor(B_logprob)
 
+        dummy_step = 0
         for _ in range(self.config["aux_epochs"]):
             for mb_inds in for_minibatches(len(self.B), self.args.minibatch_size):
                 states_batch =  np.array(B_states[mb_inds])
@@ -274,6 +275,8 @@ class PPG(PPO):
                     L_aux = 0.5 * ((newvalue - qs_batch) ** 2).mean()
 
                 # TODO: ここの計算は確率分布からやるので大変、いくつかやり方があるけど一番簡単なモンテカルロ推定でとりあえずやってみる
+                print("newlogprob", newlogprob)
+                print("B_logprob", B_logprob[mb_inds])
                 logratio = newlogprob - B_logprob[mb_inds]
                 ratio = logratio.exp()
                 old_kl = (-logratio).mean()
@@ -315,11 +318,13 @@ class PPG(PPO):
                 L_value.backward()
                 nn.utils.clip_grad_norm_(self.agent.parameters(), self.args.max_grad_norm)
                 self.optimizer.step()
-        
 
-        self.logger.write_scalar("losses/ppo_laux", L_aux.item(), self.traj.global_step)
-        self.logger.write_scalar("losses/ppo_lkl", L_kl.item(), self.traj.global_step)
-        self.logger.write_scalar("losses/ppo_lvalue", L_value.item(), self.traj.global_step)
+                # 特別ログ
+                self.logger.write_scalar("losses/ppo_laux", L_aux.item(), self.traj.global_step+dummy_step)
+                self.logger.write_scalar("losses/ppo_lkl", L_kl.item(), self.traj.global_step+dummy_step)
+                self.logger.write_scalar("losses/ppo_lvalue", L_value.item(), self.traj.global_step+dummy_step)
+                dummy_step += 1
+
 
 
         # logging Laux, Lkl?
