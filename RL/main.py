@@ -89,9 +89,9 @@ def parse_args():
     parser.add_argument("--depth", type=int, default=60, help="training depth(=gates)")
 
 
-    parser.add_argument("--agent", type=str, default='original', help="neural network structure")
-    parser.add_argument("--reward", type=str, default='original', help="reward structure")
-    parser.add_argument("--training", type=str, default='ppo', help="training method")
+    parser.add_argument("--agent", type=str, default='original', help="neural network structure (original, shared, ppg, rich-critic)")
+    parser.add_argument("--reward", type=str, default='original', help="reward structure (original, sf)")
+    parser.add_argument("--training", type=str, default='ppo', help="training method (ppo, ppg)")
 
     # 実装詳細のスイッチ
     parser.add_argument("--impl-light-feature", type=lambda x: bool(strtobool(x)), default=False, nargs="?",help="if toggled, the implementation details will be lightened")

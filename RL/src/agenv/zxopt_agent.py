@@ -16,6 +16,7 @@ from src.util import Logger, grad_statistics
 from src.agenv.zxopt_agent1 import AgentGNN1
 from src.agenv.zxopt_agent2 import AgentGNN2
 from src.agenv.zxopt_agent3 import AgentGNN3
+from src.agenv.zxopt_agent4 import AgentGNN4
 
 
 
@@ -62,6 +63,8 @@ def get_agent(envs, device, args, **kwargs):
         return AgentGNN2(envs, device, args, **kwargs)
     elif agent == "ppg":
         return AgentGNN3(envs, device, args, **kwargs)
+    elif agent == "rich-critic":
+        return AgentGNN4(envs, device, args, **kwargs)
 
 def get_agent_from_state_dict(envs, device, args: 'argparse.Namespace', state_dict: dict, **kwargs):
     agent = state_dict["agent"] if "agent" in state_dict else "original"
