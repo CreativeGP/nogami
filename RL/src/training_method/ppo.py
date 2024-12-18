@@ -34,7 +34,7 @@ class PPO():
 
         self.args = args
         self.run_name = run_name
-        self.logger = Logger(run_name, args, use_wandb=True)
+        self.logger = Logger(run_name, args, use_wandb=True if 'use-wandb' in args and args.wandb else False)
 
         # print(random.random())
         self.envs = envs

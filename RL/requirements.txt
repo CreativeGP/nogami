@@ -15,3 +15,4 @@ torchaudio==2.0.2+cu118
 -e git+https://github.com/calumholker/pyzx.git#egg=pyzx
 memory_profiler
 torchsummary
+wandb
