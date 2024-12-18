@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument("--use-async", type=bool, default=False, help="use parallel?")
     parser.add_argument("--num-process", type=int, default=8,
         help="the number of multiprocesses") #default 8
-    parser.add_argument("--use-wandb", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+    parser.add_argument("--use-wandb", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="if toggled, this experiment will be tracked with Weights and Biases")
 
     parser.add_argument("--learning-rate", type=float, default=2e-4,
