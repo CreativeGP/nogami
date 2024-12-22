@@ -244,7 +244,7 @@ class AgentGNN3(AgentGNNBase):
             
         values = self.critic_head2(
             self.critic_head2_aggregation(
-                self.critic_gnn(policy_obs.x, policy_obs.edge_index, policy_obs.edge_attr)
+                self.actor_gnn(policy_obs.x, policy_obs.edge_index, policy_obs.edge_attr)
                 , batch=policy_obs.batch))
         values = values.squeeze(-1)
         return values# 
