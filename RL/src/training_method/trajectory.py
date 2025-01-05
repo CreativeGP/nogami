@@ -3,6 +3,9 @@ import time
 import torch
 import gym
 
+from src.util import Logger, Timer, rootdir, count_autograd_graph, for_minibatches, print_grad_summary, print_random_states, register_all_forward_hooks
+
+
 class Trajectory():
     def __init__(self, envs, agent, logger=None, device="cuda"):
         assert issubclass(type(envs), gym.vector.VectorEnv), "envs must be a gym.vector.VectorEnv"

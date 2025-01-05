@@ -12,7 +12,7 @@ from distutils.util import strtobool
 from torch_geometric.data import Batch, Data
 
 
-from src.util import Logger, Timer, rootdir, count_autograd_graph, for_minibatches
+from src.util import Logger, Timer, rootdir, count_autograd_graph, for_minibatches, print_grad_summary, print_random_states, print_grads, print_weights
 from src.training_method.trajectory import Trajectory
 
 class PPO():

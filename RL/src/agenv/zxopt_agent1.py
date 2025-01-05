@@ -9,7 +9,7 @@ from torch.distributions.categorical import Categorical
 from torch_geometric.nn import Sequential as geo_Sequential
 import networkx as nx
 
-from src.util import Logger, grad_statistics
+from src.util import Logger, forward_hook, print_random_states
 from src.agenv.zxopt_agent_base import AgentGNNBase, CategoricalMasked
 
 class AgentGNN1(AgentGNNBase):

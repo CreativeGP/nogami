@@ -47,7 +47,7 @@ class AgentGNN(nn.Module):
         c_in_v = 11
         edge_dim = 6
         edge_dim_v = 3
-        self.global_attention_critic = geom_nn.GlobalAttention(
+        self.global_attention_critic = geom_nn.aggr.AttentionalAggregation(
             gate_nn=nn.Sequential(
                 nn.Linear(c_hidden, c_hidden),
                 nn.ReLU(),

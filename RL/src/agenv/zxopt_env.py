@@ -18,6 +18,8 @@ from pyzx.simplify import apply_rule, pivot
 from pyzx.symbolic import Poly
 from pyzx.utils import EdgeType, VertexType, toggle_edge
 
+from src.util import rootdir, print_random_states
+
 class ActionHistory():
     def __init__(self):
         self.vs: list[int] = []

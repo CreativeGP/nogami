@@ -5,7 +5,7 @@ import torch_geometric
 import torch
 import networkx as nx
 
-from src.util import Logger, grad_statistics
+from src.util import Logger, forward_hook
 from src.agenv.zxopt_agent_base import AgentGNNBase, CategoricalMasked
 
 # for ppg

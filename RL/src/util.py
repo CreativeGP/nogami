@@ -31,6 +31,53 @@ def count_autograd_graph(grad_fn):
         res += count_autograd_graph(i[0])
     return res
 
+def print_random_states(show_hash=False):
+    import random,json,hashlib,io,pickle
+    import torch
+    import numpy as np
+
+    if show_hash:
+        l = 5
+        md5_hash = hashlib.md5()
+        md5_hash.update(pickle.dumps(random.getstate()))
+        print("python random Random State:", md5_hash.hexdigest()[:l])
+
+        md5_hash = hashlib.md5()
+        buff = io.BytesIO(); torch.save(torch.get_rng_state(), buff); buff.seek(0)
+        md5_hash.update(buff.read())
+        print("torch CPU Random State:", md5_hash.hexdigest()[:l])
+
+        if torch.cuda.is_available():
+            md5_hash = hashlib.md5()
+            buff = io.BytesIO(); torch.save(torch.cuda.get_rng_state(), buff); buff.seek(0)
+            md5_hash.update(buff.read())
+            print("GPU Random State:", md5_hash.hexdigest()[:l])
+
+        md5_hash = hashlib.md5()
+        md5_hash.update(pickle.dumps(np.random.get_state()))
+        print("Numpy random Random State:", md5_hash.hexdigest()[:l])
+    else:
+        print("python random Random State:", random.getstate())
+        print("torch CPU Random State:",torch.get_rng_state())
+        if torch.cuda.is_available():
+            print("GPU Random State:",torch.cuda.get_rng_state(device='cuda'))
+        print("Numpy random Random State:", np.random.get_state())
+
+
+# 接頭辞を指定して、その接頭辞を持つ引数をdictにまとめる
+# def load_args(args: "argparse.Namespace", prepared_dict={}, prefix=""):
+#     if len(prepared_dict) == 0:
+#         d = {}
+#         for key, value in vars(args).items():
+#             if key.startswith(prefix):
+#                 d[key] = value
+#         return d
+#     else:
+#         for key, value in vars(args).items():
+#             if key.startswith(prefix) and key in prepared_dict:
+#                 prepared_dict[key] = value
+#         return prepared_dict
+
 # Class for time measurement
 class Timer:
     def __init__(self):
@@ -225,21 +272,79 @@ def for_minibatches(batch_size, minibatch_size):
     for start in range(0, batch_size, minibatch_size):
         yield b_inds[start:start + minibatch_size]
 
+# nn.Moduleに対して、以下の全てのモジュールにforward_hookを登録する
+def register_all_forward_hooks(model, prefix="", indent=0):
+    model.register_forward_hook(forward_hook)
+    model.ud_indent = indent
+    model.ud_prefix = prefix
+    if len(model._modules) > 0:
+        model.register_forward_pre_hook(forward_pre_hook)
+        model.ud_has_children = True
+    else:
+        model.ud_has_children = False
+    for name, module in model._modules.items():
+        if module is None:
+            continue
+        register_all_forward_hooks(module, prefix=prefix+'.'+name, indent=indent+1)
 
 # for register_forward_hook
-def grad_statistics(model, inputs, outputs):
-    print(model.__class__.__name__)
-    print("outputs", outputs[0].flatten().mean(), outputs[0].flatten().std())
-    print("inputs", inputs[0].flatten().mean(), inputs[0].flatten().std())
-    # print(model, inputs, outputs)
+def forward_hook(model, inputs, output):
+    import torch
+    in_shapes = []
+    for i in inputs:
+        if isinstance(i, torch.Tensor):
+            in_shapes.append(list(i.shape))
+        else:
+            in_shapes.append(None)
+    INDENT = "    "*model.ud_indent
+    print(INDENT, )
+    if not model.ud_has_children:
+        print(INDENT, '>'*model.ud_indent, f"({model.ud_prefix})", model.__class__.__name__)
+        for name, param in model.named_parameters():
+            print(INDENT, '+', name, param.data.shape)
+        print(INDENT, "inputs", in_shapes, "\n".join([INDENT+l for l in inputs.__repr__().split('\n')]))
+    else:
+        print(INDENT, '↳', f"({model.ud_prefix})", model.__class__.__name__)
+    print(INDENT, "output", output.shape, "\n".join([INDENT+l for l in output.__repr__().split('\n')]))
 
+# for register_forward_pre_hook
+def forward_pre_hook(model, inputs):
+    import torch
+    in_shapes = []
+    for i in inputs:
+        if isinstance(i, torch.Tensor):
+            in_shapes.append(list(i.shape))
+        else:
+            in_shapes.append(None)
+    INDENT = "    "*model.ud_indent
+    print(INDENT, )
+    print(INDENT, '>'*model.ud_indent, f"({model.ud_prefix})", model.__class__.__name__)
+    print(INDENT, "inputs", in_shapes, "\n".join([INDENT+l for l in inputs.__repr__().split('\n')]))
+
+# 重みの統計情報を表示
 def print_weight_summary(model):
     print("Weights for ", model.__class__.__name__)
     for name, param in model.named_parameters():
         s = str(list(param.data.shape))
         print(f"{name:<50} {s:<10} μ={param.data.mean().item():.3f}\tstd={param.data.std().item():.3f}")
 
-def print_weights(model, tag:str):
+# 重みの値を表示
+def print_weights(model, tag:str=""):
     for name, param in model.named_parameters():
-        if name == tag:
+        if tag in name or tag == "":
+            print(name)
             print(param.data)
+
+# 勾配の統計情報を表示
+def print_grad_summary(model):
+    print("Gradients for ", model.__class__.__name__)
+    for name, param in model.named_parameters():
+        s = str(list(param.grad.shape))
+        print(f"{name:<50} {s:<10} μ={param.grad.mean().item():.3e}\tstd={param.grad.std().item():.3e}")
+
+# 勾配の値を表示
+def print_grads(model, tag:str=""):
+    for name, param in model.named_parameters():
+        if name == tag or tag == "":
+            print(name)
+            print(param.grad)

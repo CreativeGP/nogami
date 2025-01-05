@@ -12,7 +12,7 @@ from torch_geometric.nn import Sequential as geo_Sequential
 import networkx as nx
 from memory_profiler import profile
 
-from src.util import Logger, grad_statistics
+from src.util import Logger, forward_hook
 from src.agenv.zxopt_agent1 import AgentGNN1
 from src.agenv.zxopt_agent2 import AgentGNN2
 from src.agenv.zxopt_agent3 import AgentGNN3

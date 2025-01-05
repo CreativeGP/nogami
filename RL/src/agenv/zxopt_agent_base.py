@@ -11,7 +11,7 @@ from torch_geometric.nn import Sequential as geo_Sequential
 import networkx as nx
 from memory_profiler import profile
 
-from src.util import Logger, grad_statistics
+from src.util import Logger, forward_hook
 
 # torch.distributions.categoricalを継承して、
 class CategoricalMasked(torch.distributions.Categorical):
