@@ -102,7 +102,7 @@ class AgentGNN4(AgentGNNBase):
         )
 
 
-        self.critic_head_aggregation = geom_nn.GlobalAttention(
+        self.critic_head_aggregation = geom_nn.aggr.AttentionalAggregation(
             gate_nn=nn.Sequential(
                 nn.Linear(c_hidden, c_hidden),
                 nn.ReLU(),
@@ -133,7 +133,7 @@ class AgentGNN4(AgentGNNBase):
         values = self.critic_head(
             self.critic_head_aggregation(
                 self.critic_gnn(x.x, x.edge_index, x.edge_attr),
-                batch=x.batch,
+                x.batch,
             ))
         return values
 

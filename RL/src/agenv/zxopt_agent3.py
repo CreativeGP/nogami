@@ -105,7 +105,7 @@ class AgentGNN3(AgentGNNBase):
         )
 
         # for critic gnn
-        self.critic_head1_aggregation = geom_nn.GlobalAttention(
+        self.critic_head1_aggregation = geom_nn.aggr.AttentionalAggregation(
             gate_nn=nn.Sequential(
                 nn.Linear(c_hidden, c_hidden),
                 nn.ReLU(),
@@ -124,7 +124,7 @@ class AgentGNN3(AgentGNNBase):
             nn.Linear(c_hidden_v, out_features=1),
         )
         # for actor gnn
-        self.critic_head2_aggregation = geom_nn.GlobalAttention(
+        self.critic_head2_aggregation = geom_nn.aggr.AttentionalAggregation(
             gate_nn=nn.Sequential(
                 nn.Linear(c_hidden, c_hidden),
                 nn.ReLU(),
@@ -155,7 +155,7 @@ class AgentGNN3(AgentGNNBase):
         values = self.critic_head1(
             self.critic_head1_aggregation(
                 self.critic_gnn(x.x, x.edge_index, x.edge_attr),
-                batch=x.batch))
+                x.batch))
         return values
     
 
