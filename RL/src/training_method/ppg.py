@@ -24,7 +24,7 @@ class PPG(PPO):
             "kl": 'whole',
             "lr_aux_policy": args.learning_rate,
             "lr_aux_value": args.learning_rate,
-            "β_clone": 0.3,
+            "β_clone": 0.1,
         }
         self.lr_aux_policy: float
         self.lr_aux_value: float
