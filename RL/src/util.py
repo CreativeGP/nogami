@@ -120,10 +120,13 @@ class Logger():
         self.use_wandb = use_wandb
 
         if use_wandb:
+            import random
+            randst = random.getstate()
+            # NOTE: これ、randomを変えるようなのでビックリ
             import wandb
             wandb.login(key='07513fa9ea56e3b37748d95ff8c09a39650e397b')
             wandb.init(project="zxrl", name=run_name, config=vars(args), )
-
+            random.setstate(randst)
         
         self.write_dict("hyperparameters", vars(args))
         # self.writer.add_text(

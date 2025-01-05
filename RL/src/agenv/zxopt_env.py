@@ -984,7 +984,6 @@ class ZXEnv(ZXEnvBase):
         
         # circuit generation
         while not valid_circuit:
-            # print('env.reset', random.random())
             def get_nx_graph(g):
                 nodelist = []
                 for v in g.vertices():
@@ -997,6 +996,9 @@ class ZXEnv(ZXEnvBase):
                 G.add_edges_from(edgelist)
                 return G
 
+            # print()
+            # print("generating random graph")
+            # print_random_states(show_hash=True)
 
             g = zx.generate.cliffordT(
                self.qubits, self.depth, p_t=0.17, p_s=0.24, p_hsh=0.25, 
