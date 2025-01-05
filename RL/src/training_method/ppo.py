@@ -159,6 +159,9 @@ class PPO():
 
     def update_networks(self):
         print(np.count_nonzero(self.traj.rewards.cpu().numpy() < -0.1))
+        # print("rewards", (self.traj.b_rewards.tolist()))
+        # print("values", (self.traj.b_values.tolist()))
+        # print("advantages", (self.traj.b_advantages.tolist()))
 
         # Optimizing the policy and value network
         b_inds = np.arange(self.args.batch_size)  
@@ -171,6 +174,10 @@ class PPO():
             for start in range(
                 0, self.args.batch_size, self.args.minibatch_size
             ):  # loop over entire batch, one minibatch at the time
+                # print()
+                # print("begin minibatch")
+                # print_random_states(show_hash=True)
+
                 end = start + self.args.minibatch_size
                 mb_inds = b_inds[start:end]
                 states_batch = [self.traj.states[i] for i in mb_inds]
@@ -229,7 +236,8 @@ class PPO():
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.agent.parameters(), self.args.max_grad_norm)
                 self.optimizer.step()
-
+                # print(v_loss)
+                # print_grad_summary(self.agent)
 
             if self.args.target_kl is not None:
                 if approx_kl > self.args.target_kl:
@@ -247,6 +255,16 @@ class PPO():
         var_val = np.var(y_pred)
         var_ret = np.var(y_true)
         cov_pred_true = np.cov(y_pred, y_true)[0,1]
+
+        # import matplotlib.pyplot as plt
+        #         # 薄い色を重ねる。丸は小さく
+        # plt.scatter(y_true, y_pred, alpha=0.1, s=2)
+        
+        # x_min, x_max = plt.xlim()
+        # # ylimをx軸の範囲と同じに設定
+        # plt.ylim(x_min, x_max)
+        # plt.show()
+
         self.logger.write_scalar("losses/vtarget_variance", vtarget_variance, self.traj.global_step)
         self.logger.write_scalar("losses/var_values", var_val, self.traj.global_step)
         self.logger.write_scalar("losses/var_returns", var_ret, self.traj.global_step)

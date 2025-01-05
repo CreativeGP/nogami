@@ -173,7 +173,7 @@ class ZXEnvBase(gym.Env):
         self.graph = self.graph.copy() #Relabel nodes due to PYZX not keeping track of node id properly.
         graph = self.graph.copy()
         graph.normalize()
-        
+
         try:
             circuit = zx.extract_circuit(graph, up_to_perm=True)
             circuit = circuit.to_basic_gates()
@@ -187,9 +187,13 @@ class ZXEnvBase(gym.Env):
             # なんでdev=cpuで発生するのかはわからんけど... 別にdev=cudaでもここを通れば発生すると思うんだけど
             # new_gates = np.inf
             new_gates = self.current_gates
+            print(self.action_pattern, [act_type, new_gates-self.current_gates, vs])
             act_type = "STOP"
+            print("error", e)
+            # import pickle; pickle.dump(self.init_graph, open("graph.pkl", "wb"))
+            # import sys; sys.exit()
         
-        self.action_pattern.append([act_type, new_gates-self.current_gates, ])
+        self.action_pattern.append([act_type, new_gates-self.current_gates, vs])
         reward = 0
         # NOTE(cgp): エピソード中で最小のゲート数のものを出力とする
         if new_gates < self.min_gates:
@@ -223,6 +227,8 @@ class ZXEnvBase(gym.Env):
             history.vs.append(act_node2)
         history.gate_reduction = new_gates - self.current_gates
         history.reward = reward
+
+        # print(remaining_actions, " ", end="")
 
 
         # End episode if there are no remaining actions or Maximum Length Reached or Incorrect Action Selected
@@ -944,6 +950,18 @@ class ZXEnvBase(gym.Env):
         self.pivot_info_dict = self.match_pivot_parallel() | self.match_pivot_boundary() | self.match_pivot_gadget()
         self.gadget_info_dict, self.gadgets = self.match_phase_gadgets()
         self.gadget_fusion_ids = list(self.gadget_info_dict)
+    
+    def get_info(self):
+        self.pivot_info_dict = self.match_pivot_parallel() | self.match_pivot_boundary() | self.match_pivot_gadget()
+        self.gadget_info_dict, self.gadgets = self.match_phase_gadgets()
+        self.gadget_fusion_ids = list(self.gadget_info_dict)
+        return {
+            "piv_nodes": self.pivot_info_dict,
+            "lcomp_nodes": self.match_lcomp(),
+            "iden_nodes": self.match_ids(),
+            "gf_nodes": self.gadget_info_dict,
+        }
+
 
 class ZXEnv(ZXEnvBase):
     def __init__(self, qubits, depth, gate_type, silent:bool = False, args: argparse.Namespace = None):
@@ -983,6 +1001,8 @@ class ZXEnv(ZXEnvBase):
             g = zx.generate.cliffordT(
                self.qubits, self.depth, p_t=0.17, p_s=0.24, p_hsh=0.25, 
             )
+            self.init_graph = g.copy()
+
             # print(nx.weisfeiler_lehman_graph_hash(get_nx_graph(g)))
             c = zx.Circuit.from_graph(g)
             self.no_opt_stats = self.get_data(c.to_basic_gates())

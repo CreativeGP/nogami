@@ -1,6 +1,7 @@
 import time
 
 import torch
+from torch_geometric.data import Batch, Data
 import gym
 
 from src.util import Logger, Timer, rootdir, count_autograd_graph, for_minibatches, print_grad_summary, print_random_states, register_all_forward_hooks
@@ -54,6 +55,9 @@ class Trajectory():
                     self.values[step] = self.agent.get_value(self.next_s, self.next_info).flatten()
             self.actions[step] = action
             self.logprobs[step] = logprob
+            # print()
+            # print("before env step")
+            # print_random_states(show_hash=True)
 
             # 観測情報を取得 (s a r s')
             s_, r, done, deprecated, self.next_info = self.envs.step(action_ids.cpu().numpy())

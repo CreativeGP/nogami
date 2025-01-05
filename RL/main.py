@@ -178,6 +178,9 @@ if __name__ == "__main__":
     from src.training_method.ppg import PPG
     from src.agenv.zxopt_agent import get_agent
     from src.util import CustomizedAsyncVectorEnv, CustomizedSyncVectorEnv
+    import warnings
+
+    warnings.simplefilter("ignore")
 
     args = parse_args()
 
@@ -188,11 +191,9 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = args.torch_deterministic
     # torch.backends.cudnn.deterministic = True
     torch.cuda.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    torch.backends.cudnn.benchmark = False
-
-    print("CPU Random State:",torch.get_rng_state())
-    if torch.cuda.is_available():
+    print("Interop thereads: ", torch.get_num_interop_threads())
+    print("Threads: ", torch.get_num_threads())
+    
         print("GPU Random State:",torch.cuda.get_rng_state(device='cuda'))
 
 
@@ -212,6 +213,8 @@ if __name__ == "__main__":
         )
 
     agent = get_agent(envs, device, args).to(device)
+    # register_all_forward_hooks(agent)
+    torch.set_printoptions(precision=10, threshold=10000)
     if args.checkpoint is not None:
         agent.load_state_dict(
             torch.load(args.checkpoint, map_location=torch.device("cpu"))
