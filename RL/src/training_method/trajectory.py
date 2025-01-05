@@ -102,20 +102,29 @@ class Trajectory():
 
         # bootstrap value if not done, implement GAE-Lambda advantage calculation
         with torch.no_grad():
+            next_value = self.agent.get_value(self.next_s, self.next_info).reshape(1, -1)
             if use_gae:
                 advantages = torch.zeros_like(self.rewards).to(self.device)
                 lastgaelam = 0
-                for t in reversed(range(self.length-1)):
-                    nextnonterminal = 1.0 - self.dones[t + 1]
-                    nextvalues = self.values[t + 1]
+                for t in reversed(range(self.length)):
+                    if t == self.length - 1:
+                        nextnonterminal = 1.0 - self.next_done
+                        nextvalues = next_value
+                    else:
+                        nextnonterminal = 1.0 - self.dones[t + 1]
+                        nextvalues = self.values[t + 1]
                     delta = self.rewards[t] + gamma * nextvalues * nextnonterminal - self.values[t]
                     advantages[t] = lastgaelam = delta + gamma * gae_lambda * nextnonterminal * lastgaelam
                 returns = advantages + self.values
             else:
                 returns = torch.zeros_like(self.rewards).to(self.device)
                 for t in reversed(range(self.length-1)):
-                    nextnonterminal = 1.0 - self.dones[t + 1]
-                    next_return = returns[t + 1]
+                    if t == self.length - 1:
+                        nextnonterminal = 1.0 - self.next_done
+                        next_return = next_value
+                    else:
+                        nextnonterminal = 1.0 - self.dones[t + 1]
+                        next_return = returns[t + 1]
                     returns[t] = self.rewards[t] + gamma * nextnonterminal * next_return
                 advantages = returns - self.values
         # self.timer.stop()

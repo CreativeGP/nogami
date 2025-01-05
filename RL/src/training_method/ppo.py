@@ -47,7 +47,7 @@ class PPO():
         if args.checkpoint is not None:
             self.traj.global_step = args.global_step
         num_updates = self.args.total_timesteps // self.args.batch_size
-        self.start_update = self.traj.global_step // self.args.batch_size if args.checkpoint is not None else 0
+        self.start_update = self.traj.global_step // self.args.batch_size if args.checkpoint is not None else 1
 
         self.init_logger_data()
 
@@ -65,14 +65,14 @@ class PPO():
     def clean_up_log(self):
         print(self.run_name)
         if self.args.checkpoint is not None:
-            if self.traj.global_step-self.args.global_step < 8000:
+            if self.traj.global_step-self.args.global_step < 16000:
                 # remove directory
-                print(f"Global steps {self.traj.global_step} is less than 8000. Removing directory...")
+                print(f"Global steps {self.traj.global_step} is less than 16000. Removing directory...")
                 shutil.rmtree(rootdir(f"/runs/{self.run_name}"))
         else:
-            if self.traj.global_step < 8000:
+            if self.traj.global_step < 16000:
                 # remove directory
-                print(f"Global steps {self.traj.global_step} is less than 8000. Removing directory...")
+                print(f"Global steps {self.traj.global_step} is less than 16000. Removing directory...")
                 shutil.rmtree(rootdir(f"/runs/{self.run_name}"))
 
     
@@ -98,8 +98,10 @@ class PPO():
 
         print(f"Run start: {self.run_name}")
 
-
-        NUM_UPDATES = 2048
+        # NOTE(cgp): ここがpure実装との差異になってしまっている. 多分追加学習との兼ね合いで変えたんだろう.
+        # NUM_UPDATES = 2048
+        NUM_UPDATES = self.args.total_timesteps // self.args.batch_size
+        print("NUM_UPDATES:", NUM_UPDATES)
         for update in range(self.start_update, NUM_UPDATES):
             if update % 10 == 1:
                 state_dict = self.agent.state_dict()
@@ -108,7 +110,7 @@ class PPO():
             if self.args.anneal_lr:
                 frac = max(1.0 / 100, 1.0 - (update - 1.0) / (NUM_UPDATES * 5.0 / 6))
                 lrnow = frac * self.args.learning_rate
-                print(lrnow)
+                print("Learning Rate:", lrnow, update)
                 self.optimizer.param_groups[0]["lr"] = lrnow
                 neg_reward_discount = max(1, 5 * (1 - 4 * update / NUM_UPDATES))
             if update * 1.0 / NUM_UPDATES > 5.0 / 6:
