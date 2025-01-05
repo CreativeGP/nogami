@@ -128,7 +128,7 @@ def get_results(param):
 
         start = time.time()
         while not done:
-            action, _, _, _, action_id = agent.get_next_action(state, info, device=device)
+            action, _, _, _, action_id, _ = agent.get_next_action(state, info, device=device)
             action = action.flatten()
             state, reward, done, deprecated, info = envs.step(action_id.cpu().numpy())
         end = time.time()

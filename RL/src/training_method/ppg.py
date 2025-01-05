@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-
 from src.agenv.zxopt_agent import AgentGNN3
 from src.training_method.ppo import PPO
 from src.util import Logger, Timer, rootdir, count_autograd_graph, for_minibatches
@@ -22,16 +21,17 @@ class PPG(PPO):
             "ppo_epochs": 8,
             "n_policy_phase": 4,
             "aux_epochs": 4,
-            "schulman_kl": False,
+            "kl": 'whole',
             "lr_aux_policy": args.learning_rate,
             "lr_aux_value": args.learning_rate,
-            "β_clone": 0.1,
+            "β_clone": 0.3,
         }
         self.lr_aux_policy: float
         self.lr_aux_value: float
         self.B: List[PPG.ReuseSample] = []
         super().__init__(envs, agent, args, run_name)
         self.logger.write_dict("ppo", self.config)
+        print("PPG Config:", self.config)
 
 
     def run(self):
@@ -112,7 +112,7 @@ class PPG(PPO):
                 states_batch = [self.traj.states[i] for i in mb_inds]
                 infos_batch = [self.traj.infos[i] for i in mb_inds]
                 # バッチでとってきたものの一つ先を見る
-                _, newlogprob, entropy, logits, _ = self.agent.get_next_action(
+                _, newlogprob, entropy, logits, _, _ = self.agent.get_next_action(
                     states_batch,
                     infos_batch,
                     self.traj.b_actions.long()[mb_inds].T, device=self.device
@@ -231,15 +231,18 @@ class PPG(PPO):
         B_qs = np.array([sample.qvalue for sample in self.B])
 
         B_logprob = np.array([])
+        B_pd = np.array([])
         for inds in np.array_split(np.arange(len(self.B)), len(self.B) // self.args.minibatch_size + 1):
             # 現在のπで計算
-            _,  _B_logprob, _, _, _ = self.agent.get_next_action(
+            _,  _B_logprob, _, _, _, pd = self.agent.get_next_action(
                 B_states[inds],
                 B_infos[inds],
                 action=None,
                 device=self.device
             )
+            pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
             B_logprob = np.concatenate([B_logprob, _B_logprob.detach().numpy()])
+            B_pd = np.concatenate([B_pd, pd])
         print(B_logprob.shape, B_logprob)
         B_logprob = torch.Tensor(B_logprob)
 
@@ -251,12 +254,13 @@ class PPG(PPO):
                 values_batch =  torch.Tensor(B_values[mb_inds])
                 qs_batch =  torch.Tensor(B_qs[mb_inds])
 
-                _, newlogprob, _, _, _ = self.agent.get_next_action(
+                _, newlogprob, _, _, _, pd = self.agent.get_next_action(
                     states_batch,
                     infos_batch,
                     action=None,
                     device=self.device
                 )
+                pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
 
 
                 newvalue = self.agent.get_value_from_actor_head(states_batch, infos_batch)
@@ -279,12 +283,16 @@ class PPG(PPO):
                 print("B_logprob", B_logprob[mb_inds])
                 logratio = newlogprob - B_logprob[mb_inds]
                 ratio = logratio.exp()
-                old_kl = (-logratio).mean()
-                new_kl = ((ratio - 1) - logratio).mean() # スパイクたちがち
-                if self.config["schulman_kl"]:
+                if self.config["kl"] == 'naive':
+                    new_kl = ((ratio - 1) - logratio).mean() # スパイクたちがち
                     L_kl = new_kl
-                else:
+                elif self.config["kl"] == 'schulman':
+                    old_kl = (-logratio).mean()
                     L_kl = old_kl
+                elif self.config["kl"] == 'whole':
+                    whole_kl = torch.Tensor([torch.distributions.kl.kl_divergence(pd1, pd2) for pd1, pd2 in zip(B_pd[mb_inds], pd)]).mean()
+                    # 一個一個やるとちょっと遅いかもしれん
+                    L_kl = whole_kl
                 #L_kl = new_kl
 
                 L_joint = L_aux + self.config["β_clone"]*L_kl
@@ -320,10 +328,11 @@ class PPG(PPO):
                 self.optimizer.step()
 
                 # 特別ログ
-                self.logger.write_scalar("losses/ppo_laux", L_aux.item(), self.traj.global_step+dummy_step)
-                self.logger.write_scalar("losses/ppo_lkl", L_kl.item(), self.traj.global_step+dummy_step)
-                self.logger.write_scalar("losses/ppo_lvalue", L_value.item(), self.traj.global_step+dummy_step)
+                self.logger.write_scalar("losses/ppg_laux", L_aux.item(), self.traj.global_step+dummy_step)
+                self.logger.write_scalar("losses/ppg_lkl", L_kl.item(), self.traj.global_step+dummy_step)
+                self.logger.write_scalar("losses/ppg_lvalue", L_value.item(), self.traj.global_step+dummy_step)
                 dummy_step += 1
+
 
 
 

@@ -221,7 +221,7 @@ def get_results(agent,i):
     while len(traversal_list) > 0 and count < args.max_traversal:
         node = sample_next()
         b_state, b_info = [node.graph], [node.info]
-        action, _, _, _, action_id = agent.get_next_action(b_state, b_info, device=device)
+        action, _, _, _, action_id, _ = agent.get_next_action(b_state, b_info, device=device)
         action = action.flatten()
 
         new_node = TraversalNode()
