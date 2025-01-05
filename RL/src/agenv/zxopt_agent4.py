@@ -380,7 +380,7 @@ class AgentGNN4(AgentGNNBase):
             
         # Sample from each set of probs using Categorical
         # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
-        categoricals = CategoricalMasked(logits=batch_logits.cpu(), masks=act_mask.cpu(), device='cpu')
+        categoricals = CategoricalMasked(logits=batch_logits.to(device), masks=act_mask.to(device), device=device)
 
         # Convert the list of samples back to a tensor
         # actionノードの
@@ -400,7 +400,7 @@ class AgentGNN4(AgentGNNBase):
         
         logprob = categoricals.log_prob(action.cpu())
         entropy = categoricals.entropy()
-        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device)
+        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device), categoricals
     
     def get_value(self, graph, info):
         if not isinstance(graph,(tuple,list,np.ndarray)):

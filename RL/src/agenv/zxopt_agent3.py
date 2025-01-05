@@ -196,7 +196,7 @@ class AgentGNN3(AgentGNNBase):
             
         # Sample from each set of probs using Categorical
         # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
-        categoricals = CategoricalMasked(logits=batch_logits.cpu(), masks=act_mask.cpu(), device='cpu')
+        categoricals = CategoricalMasked(logits=batch_logits.to(device), masks=act_mask.to(device), device=device)
 
         # Convert the list of samples back to a tensor
         # actionノードの
@@ -216,7 +216,7 @@ class AgentGNN3(AgentGNNBase):
         
         logprob = categoricals.log_prob(action.cpu())
         entropy = categoricals.entropy()
-        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device)
+        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device), categoricals
 
     def get_value(self, graph, info):
         return self.get_value_from_critic_head(graph, info)
@@ -231,8 +231,8 @@ class AgentGNN3(AgentGNNBase):
             
         values = self.critic_head1(
             self.critic_head1_aggregation(
-                self.critic_gnn(policy_obs.x, policy_obs.edge_index, policy_obs.edge_attr)
-                , batch=policy_obs.batch))
+                self.critic_gnn(policy_obs.x, policy_obs.edge_index, policy_obs.edge_attr),
+                policy_obs.batch))
         values = values.squeeze(-1)
         return values# 
     
@@ -244,8 +244,8 @@ class AgentGNN3(AgentGNNBase):
             
         values = self.critic_head2(
             self.critic_head2_aggregation(
-                self.actor_gnn(policy_obs.x, policy_obs.edge_index, policy_obs.edge_attr)
-                , batch=policy_obs.batch))
+                self.actor_gnn(policy_obs.x, policy_obs.edge_index, policy_obs.edge_attr),
+                policy_obs.batch))
         values = values.squeeze(-1)
         return values# 
         # zxdiagramから(node_features, edge_index, edge_features、identifier)を作成して、torch.tensorで返す

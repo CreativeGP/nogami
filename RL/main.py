@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import gym
 
-from src.util import rootdir
+from src.util import rootdir, print_random_states, print_weights, register_all_forward_hooks
 
 # NOTE(cgp): pip install pydevdしない限り正しく動く
 try:
@@ -191,12 +191,12 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = args.torch_deterministic
     # torch.backends.cudnn.deterministic = True
     torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.benchmark = False
+
     print("Interop thereads: ", torch.get_num_interop_threads())
     print("Threads: ", torch.get_num_threads())
     
-        print("GPU Random State:",torch.cuda.get_rng_state(device='cuda'))
-
-
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     #Training size
     qubits = args.qubits
@@ -211,7 +211,7 @@ if __name__ == "__main__":
         envs = CustomizedSyncVectorEnv(
             [make_env(args.gym_id, args.seed + i, i, args.capture_video, run_name, qubits, depth, args.gate_type) for i in range(args.num_envs)],
         )
-
+    
     agent = get_agent(envs, device, args).to(device)
     # register_all_forward_hooks(agent)
     torch.set_printoptions(precision=10, threshold=10000)

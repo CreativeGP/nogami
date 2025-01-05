@@ -694,7 +694,8 @@ class AgentGNN1(AgentGNNBase):
             
         # Sample from each set of probs using Categorical
         # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
-        categoricals = CategoricalMasked(logits=batch_logits.cpu(), masks=act_mask.cpu(), device='cpu')
+        categoricals = CategoricalMasked(logits=batch_logits.to(device), masks=act_mask.to(device), device=device)
+        # categoricals = CategoricalMasked(logits=batch_logits, masks=act_mask, device='cuda')
 
         # Convert the list of samples back to a tensor
         # actionノードの
@@ -712,7 +713,8 @@ class AgentGNN1(AgentGNNBase):
         if testing:
             return action.T, action_id.T
         
-        logprob = categoricals.log_prob(action.cpu())
+        # logprob = categoricals.log_prob(action)
+        logprob = categoricals.log_prob(action.to(device))
         entropy = categoricals.entropy()
-        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device)
+        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device), categoricals
 
