@@ -185,7 +185,7 @@ class PPO():
                 states_batch = [self.traj.states[i] for i in mb_inds]
                 infos_batch = [self.traj.infos[i] for i in mb_inds]
                 # バッチでとってきたものの一つ先を見る, actionを指定しておくことでlogprobを取る
-                _, newlogprob, entropy, logits, _ = self.agent.get_next_action(
+                _, newlogprob, entropy, logits, _, _ = self.agent.get_next_action(
                     states_batch,
                     infos_batch,
                     action=self.traj.b_actions.long()[mb_inds].T, device=self.device
