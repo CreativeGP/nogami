@@ -679,6 +679,8 @@ class AgentGNN1(AgentGNNBase):
         act_ids = torch.zeros([policy_obs.num_graphs, self.obs_shape]).to(device)
         action_logits = torch.tensor([]).to(device)
 
+        shapes = torch.zeros([policy_obs.num_graphs]).to(device)
+
         for b in range(policy_obs.num_graphs):
             # get_policy_feature_graphのyにはidentifierが入っている
             ids = policy_obs.y[policy_obs.batch == b].to(device)
@@ -691,17 +693,23 @@ class AgentGNN1(AgentGNNBase):
             act_mask[b, : probs.shape[0]] = torch.tensor([True] * probs.shape[0])
             act_ids[b, : action_nodes.shape[0]] = ids[action_nodes]
             action_logits = torch.cat((action_logits, probs.flatten()), 0).reshape(-1)
-            
+            shapes[b] = probs.shape[0]
+
         # Sample from each set of probs using Categorical
         # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
         categoricals = CategoricalMasked(logits=batch_logits.to(device), masks=act_mask.to(device), device=device)
-        # categoricals = CategoricalMasked(logits=batch_logits, masks=act_mask, device='cuda')
+        # categoricals = CategoricalMasked(logits=batch_logits.cpu(), masks=act_mask.cpu(), device='cpu')
 
         # Convert the list of samples back to a tensor
         # actionノードの
         if action is None:
             # NOTE: 確率処理
-            action = categoricals.sample()
+            # action = categoricals.sample()
+            # 完全なマスク
+            while True:
+                action = categoricals.sample()
+                if all(action <= shapes):
+                    break
             # print(f"action: {action}")
             # exit(0)
             batch_id = torch.arange(policy_obs.num_graphs)
@@ -713,7 +721,7 @@ class AgentGNN1(AgentGNNBase):
         if testing:
             return action.T, action_id.T
         
-        # logprob = categoricals.log_prob(action)
+        # logprob = categoricals.log_prob(action.cpu())
         logprob = categoricals.log_prob(action.to(device))
         entropy = categoricals.entropy()
         return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device), categoricals
