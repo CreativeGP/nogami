@@ -41,7 +41,7 @@ class PPG(PPO):
         print(f"Run start: {self.run_name}")
 
 
-        NUM_UPDATES = 2048
+        NUM_UPDATES = self.args.total_timesteps // self.args.batch_size
         for update in range(self.start_update, NUM_UPDATES):
             if update % 10 == 1:
                 state_dict = self.agent.state_dict()
