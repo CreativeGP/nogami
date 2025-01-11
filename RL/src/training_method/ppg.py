@@ -19,7 +19,7 @@ class PPG(PPO):
     def __init__(self, envs, agent: AgentGNN3, args, run_name):
         self.config: dict = {
             "ppo_epochs": 8,
-            "n_policy_phase": 1,
+            "n_policy_phase": 4,
             "aux_epochs": 4,
             "kl": 'whole',
             "lr_aux_policy": args.learning_rate,
