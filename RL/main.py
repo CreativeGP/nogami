@@ -212,7 +212,6 @@ if __name__ == "__main__":
             [make_env(args.gym_id, args.seed + i, i, args.capture_video, run_name, qubits, depth, args.gate_type) for i in range(args.num_envs)],
         )
     
-    agent = get_agent(envs, device, args).to(device)
     # register_all_forward_hooks(agent)
     torch.set_printoptions(precision=10, threshold=10000)
     if args.checkpoint is None:
