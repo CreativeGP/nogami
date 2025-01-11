@@ -19,15 +19,15 @@ class PPG(PPO):
     def __init__(self, envs, agent: AgentGNN3, args, run_name):
         self.config: dict = {
             "ppo_epochs": 8,
-            "n_policy_phase": 4,
+            "n_policy_phase": 1,
             "aux_epochs": 4,
             "kl": 'whole',
             "lr_aux_policy": args.learning_rate,
             "lr_aux_value": args.learning_rate,
             "β_clone": 0.1,
         }
-        self.lr_aux_policy: float
-        self.lr_aux_value: float
+        self.lr_aux_policy: float = args.learning_rate
+        self.lr_aux_value: float = args.learning_rate
         self.B: List[PPG.ReuseSample] = []
         super().__init__(envs, agent, args, run_name)
         self.logger.write_dict("ppo", self.config)
@@ -295,7 +295,8 @@ class PPG(PPO):
 
                 L_joint = L_aux + self.config["β_clone"]*L_kl
                 print("L_joint = L_aux + β*L_kl", L_joint.item(), L_aux.item(), self.config["β_clone"]*L_kl.item())
-                
+                # import sys; sys.exit()
+
                 self.optimizer.param_groups[0]["lr"] = self.lr_aux_policy
                 self.optimizer.zero_grad()
                 L_joint.backward()
