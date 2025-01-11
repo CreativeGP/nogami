@@ -278,8 +278,6 @@ class EthernalAgentBase(AgentGNNBase,ABC):
                 act_ids[b, : action_nodes_mask.shape[0]] = ids[action_nodes_mask]
                 action_logits = torch.cat((action_logits, probs.flatten()), 0).reshape(-1)
                 shapes[b] = probs.shape[0]
-            print(probs)
-
 
         # Sample from each set of probs using Categorical
         # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
