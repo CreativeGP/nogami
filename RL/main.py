@@ -176,7 +176,7 @@ print("__name__", __name__)
 if __name__ == "__main__":
     from src.training_method.ppo import PPO
     from src.training_method.ppg import PPG
-    from src.agenv.zxopt_agent import get_agent
+    from src.agenv.zxopt_agent import get_agent, get_agent_from_state_dict
     from src.util import CustomizedAsyncVectorEnv, CustomizedSyncVectorEnv
     import warnings
 
@@ -215,10 +215,11 @@ if __name__ == "__main__":
     agent = get_agent(envs, device, args).to(device)
     # register_all_forward_hooks(agent)
     torch.set_printoptions(precision=10, threshold=10000)
-    if args.checkpoint is not None:
-        agent.load_state_dict(
-            torch.load(args.checkpoint, map_location=torch.device("cpu"))
-        )
+    if args.checkpoint is None:
+        agent = get_agent(envs, device, args).to(device)
+    else:
+        d = torch.load(args.checkpoint, map_location=torch.device("cpu"))
+        agent = get_agent_from_state_dict(envs, device, args, d).to(device)
 
     if 'training' in args and args.training == 'ppg':
         ppg = PPG(envs, agent, args, run_name)

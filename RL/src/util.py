@@ -23,12 +23,14 @@ def show_autograd_graph(grad_fn, indent=0):
         return
     for i in grad_fn.next_functions:
         show_autograd_graph(i[0], indent+1)
-def count_autograd_graph(grad_fn):
+def count_autograd_graph(grad_fn, level=-1):
     if not hasattr(grad_fn, 'next_functions'):
         return 0
     res = len(grad_fn.next_functions)
+    if level == 0:
+        return res
     for i in grad_fn.next_functions:
-        res += count_autograd_graph(i[0])
+        res += count_autograd_graph(i[0], level-1 if level > 0 else -1)
     return res
 
 def print_random_states(show_hash=False):
@@ -40,28 +42,28 @@ def print_random_states(show_hash=False):
         l = 5
         md5_hash = hashlib.md5()
         md5_hash.update(pickle.dumps(random.getstate()))
-        print("python random Random State:", md5_hash.hexdigest()[:l])
+        print("random:", md5_hash.hexdigest()[:l])
 
         md5_hash = hashlib.md5()
         buff = io.BytesIO(); torch.save(torch.get_rng_state(), buff); buff.seek(0)
         md5_hash.update(buff.read())
-        print("torch CPU Random State:", md5_hash.hexdigest()[:l])
+        print("torch(cpu):", md5_hash.hexdigest()[:l])
 
         if torch.cuda.is_available():
             md5_hash = hashlib.md5()
             buff = io.BytesIO(); torch.save(torch.cuda.get_rng_state(), buff); buff.seek(0)
             md5_hash.update(buff.read())
-            print("GPU Random State:", md5_hash.hexdigest()[:l])
+            print("torch(gpu):", md5_hash.hexdigest()[:l])
 
         md5_hash = hashlib.md5()
         md5_hash.update(pickle.dumps(np.random.get_state()))
-        print("Numpy random Random State:", md5_hash.hexdigest()[:l])
+        print("numpy:", md5_hash.hexdigest()[:l])
     else:
-        print("python random Random State:", random.getstate())
-        print("torch CPU Random State:",torch.get_rng_state())
+        print("random:", random.getstate())
+        print("torch(cpu):",torch.get_rng_state())
         if torch.cuda.is_available():
-            print("GPU Random State:",torch.cuda.get_rng_state(device='cuda'))
-        print("Numpy random Random State:", np.random.get_state())
+            print("torch(gpu):",torch.cuda.get_rng_state(device='cuda'))
+        print("numpy:", np.random.get_state())
 
 
 # 接頭辞を指定して、その接頭辞を持つ引数をdictにまとめる
@@ -312,6 +314,56 @@ def forward_hook(model, inputs, output):
 
 # for register_forward_pre_hook
 def forward_pre_hook(model, inputs):
+    import torch
+    in_shapes = []
+    for i in inputs:
+        if isinstance(i, torch.Tensor):
+            in_shapes.append(list(i.shape))
+        else:
+            in_shapes.append(None)
+    INDENT = "    "*model.ud_indent
+    print(INDENT, )
+    print(INDENT, '>'*model.ud_indent, f"({model.ud_prefix})", model.__class__.__name__)
+    print(INDENT, "inputs", in_shapes, "\n".join([INDENT+l for l in inputs.__repr__().split('\n')]))
+
+
+# nn.Moduleに対して、以下の全てのモジュールにbackward_hookを登録する
+def register_all_backward_hooks(model, prefix="", indent=0):
+    model.register_backward_hook(backward_hook)
+    model.ud_indent = indent
+    model.ud_prefix = prefix
+    if len(model._modules) > 0:
+        model.register_backward_pre_hook(backward_pre_hook)
+        model.ud_has_children = True
+    else:
+        model.ud_has_children = False
+    for name, module in model._modules.items():
+        if module is None:
+            continue
+        register_all_backward_hooks(module, prefix=prefix+'.'+name, indent=indent+1)
+
+# for register_backward_hook
+def backward_hook(model, inputs, output):
+    import torch
+    in_shapes = []
+    for i in inputs:
+        if isinstance(i, torch.Tensor):
+            in_shapes.append(list(i.shape))
+        else:
+            in_shapes.append(None)
+    INDENT = "    "*model.ud_indent
+    print(INDENT, )
+    if not model.ud_has_children:
+        print(INDENT, '>'*model.ud_indent, f"({model.ud_prefix})", model.__class__.__name__)
+        for name, param in model.named_parameters():
+            print(INDENT, '+', name, param.data.shape)
+        print(INDENT, "inputs", in_shapes, "\n".join([INDENT+l for l in inputs.__repr__().split('\n')]))
+    else:
+        print(INDENT, '↳', f"({model.ud_prefix})", model.__class__.__name__)
+    print(INDENT, "output", output.shape, "\n".join([INDENT+l for l in output.__repr__().split('\n')]))
+
+# for register_backward_pre_hook
+def backward_pre_hook(model, inputs):
     import torch
     in_shapes = []
     for i in inputs:

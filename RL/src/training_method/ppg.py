@@ -278,9 +278,8 @@ class PPG(PPO):
                 else:
                     L_aux = 0.5 * ((newvalue - qs_batch) ** 2).mean()
 
-                # TODO: ここの計算は確率分布からやるので大変、いくつかやり方があるけど一番簡単なモンテカルロ推定でとりあえずやってみる
-                print("newlogprob", newlogprob)
-                print("B_logprob", B_logprob[mb_inds])
+                # print("newlogprob", newlogprob)
+                # print("B_logprob", B_logprob[mb_inds])
                 logratio = newlogprob - B_logprob[mb_inds]
                 ratio = logratio.exp()
                 if self.config["kl"] == 'naive':
@@ -293,7 +292,6 @@ class PPG(PPO):
                     whole_kl = torch.Tensor([torch.distributions.kl.kl_divergence(pd1, pd2) for pd1, pd2 in zip(B_pd[mb_inds], pd)]).mean()
                     # 一個一個やるとちょっと遅いかもしれん
                     L_kl = whole_kl
-                #L_kl = new_kl
 
                 L_joint = L_aux + self.config["β_clone"]*L_kl
                 print("L_joint = L_aux + β*L_kl", L_joint.item(), L_aux.item(), self.config["β_clone"]*L_kl.item())
