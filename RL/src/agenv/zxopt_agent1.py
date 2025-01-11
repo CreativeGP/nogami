@@ -10,9 +10,9 @@ from torch_geometric.nn import Sequential as geo_Sequential
 import networkx as nx
 
 from src.util import Logger, forward_hook, print_random_states
-from src.agenv.zxopt_agent_base import AgentGNNBase, CategoricalMasked
+from src.agenv.zxopt_agent_base import AgentGNNBase, CategoricalMasked, PPOAgent
 
-class AgentGNN1(AgentGNNBase):
+class AgentGNN1(AgentGNNBase,PPOAgent):
     def __init__(
         self,
         envs,
@@ -151,6 +151,90 @@ class AgentGNN1(AgentGNNBase):
 
         self.detailed_weight_logs(logger, global_step)
         self.detailed_grad_logs(logger, global_step)
+
+
+
+    # x: [Batch, Batch]
+    # エージェントが次にとりたいと考えている行動を取得する. ついでに付加的な情報も返す. 
+    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
+        #  NOTE(cgp): vector envの場合、graphはリストになる. それぞれのgraphに対して特徴ベクトルを計算する.
+        # この場合, policy_obsはtorch_geometric.data.Batchという形になる.
+        # この Batch は、複数のグラフをまとめて扱うためのクラスで、これをself.actor()に入力することで、envs分のlogitsが得られる.
+        # 下の方の、policy_obs.num_graphsのループで[policy_obs.batch == b]でバッチ毎に分割して処理する.
+        if not isinstance(graph,(tuple,list,np.ndarray)):
+            graph = [graph]
+            info = [info]
+        if self.args is not None and 'impl_light_feature' in self.args and self.args.impl_light_feature:
+            policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph2(g,i,mask_stop) for g, i in zip(graph,info)])
+        else:
+            policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i,mask_stop) for g, i in zip(graph,info)])
+
+    
+        # for g, i in zip(graph,info):
+        #     _policy_obs = self.get_policy_feature_graph(g,i)
+        #     _policy_obs2 = self.get_policy_feature_graph2(g,i)
+        #     assert torch.all(_policy_obs.x == _policy_obs2.x)
+        #     # assert torch.all(_policy_obs.edge_index == _policy_obs2.edge_index)
+        #     assert torch.all(_policy_obs.edge_attr == _policy_obs2.edge_attr)
+        #     assert torch.all(_policy_obs.y == _policy_obs2.y)
+
+
+        logits = self.actor(policy_obs)
+
+        # print("logits", len(list(logits.flatten())), list(logits.flatten()))
+        
+        # actionノードの
+        batch_logits = torch.zeros([policy_obs.num_graphs, self.obs_shape]).to(device)
+        act_mask = torch.zeros([policy_obs.num_graphs, self.obs_shape]).to(device)
+        act_ids = torch.zeros([policy_obs.num_graphs, self.obs_shape]).to(device)
+        action_logits = torch.tensor([]).to(device)
+
+        shapes = torch.zeros([policy_obs.num_graphs]).to(device)
+
+        for b in range(policy_obs.num_graphs):
+            # get_policy_feature_graphのyにはidentifierが入っている
+            ids = policy_obs.y[policy_obs.batch == b].to(device)
+            # identifierが-1でないactionノードのみを取得
+            action_nodes = torch.where(ids != -1)[0].to(device)
+            # actionノードのnode_featureを取得
+            probs = logits[policy_obs.batch == b][action_nodes]
+            batch_logits[b, : probs.shape[0]] = probs.flatten()
+            # print("batch logits", batch_logits[b].mean(), batch_logits[b].std(), batch_logits[b].ent())
+            act_mask[b, : probs.shape[0]] = torch.tensor([True] * probs.shape[0])
+            act_ids[b, : action_nodes.shape[0]] = ids[action_nodes]
+            action_logits = torch.cat((action_logits, probs.flatten()), 0).reshape(-1)
+            shapes[b] = probs.shape[0]
+
+        # Sample from each set of probs using Categorical
+        # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
+        categoricals = CategoricalMasked(logits=batch_logits.to(device), masks=act_mask.to(device), device=device)
+        # categoricals = CategoricalMasked(logits=batch_logits.cpu(), masks=act_mask.cpu(), device='cpu')
+
+        # Convert the list of samples back to a tensor
+        # actionノードの
+        if action is None:
+            # NOTE: 確率処理
+            # action = categoricals.sample()
+            # 完全なマスク
+            while True:
+                action = categoricals.sample()
+                if all(action <= shapes):
+                    break
+            # print(f"action: {action}")
+            # exit(0)
+            batch_id = torch.arange(policy_obs.num_graphs)
+            action_id = act_ids[batch_id, action]
+
+        else:
+            action_id = torch.tensor([0]).to(device)
+            
+        if testing:
+            return action.T, action_id.T
+        
+        # logprob = categoricals.log_prob(action.cpu())
+        logprob = categoricals.log_prob(action.to(device))
+        entropy = categoricals.entropy()
+        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device), categoricals
 
     # zxdiagramから(node_features, edge_index, edge_features、identifier)を作成して、torch.tensorで返す
     # node_features: [位相情報18個, 入力境界？, 出力境界？, フェーズガジェット？, 行動用ノードのための情報...]
@@ -641,88 +725,4 @@ class AgentGNN1(AgentGNNBase):
             edge_index=edge_index_value.to(self.device), 
             edge_attr=edge_features.to(self.device)
             )
-
-
-
-    # x: [Batch, Batch]
-    # エージェントが次にとりたいと考えている行動を取得する. ついでに付加的な情報も返す. 
-    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
-        #  NOTE(cgp): vector envの場合、graphはリストになる. それぞれのgraphに対して特徴ベクトルを計算する.
-        # この場合, policy_obsはtorch_geometric.data.Batchという形になる.
-        # この Batch は、複数のグラフをまとめて扱うためのクラスで、これをself.actor()に入力することで、envs分のlogitsが得られる.
-        # 下の方の、policy_obs.num_graphsのループで[policy_obs.batch == b]でバッチ毎に分割して処理する.
-        if not isinstance(graph,(tuple,list,np.ndarray)):
-            graph = [graph]
-            info = [info]
-        if self.args is not None and 'impl_light_feature' in self.args and self.args.impl_light_feature:
-            policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph2(g,i,mask_stop) for g, i in zip(graph,info)])
-        else:
-            policy_obs = torch_geometric.data.Batch.from_data_list([self.get_policy_feature_graph(g,i,mask_stop) for g, i in zip(graph,info)])
-
-    
-        # for g, i in zip(graph,info):
-        #     _policy_obs = self.get_policy_feature_graph(g,i)
-        #     _policy_obs2 = self.get_policy_feature_graph2(g,i)
-        #     assert torch.all(_policy_obs.x == _policy_obs2.x)
-        #     # assert torch.all(_policy_obs.edge_index == _policy_obs2.edge_index)
-        #     assert torch.all(_policy_obs.edge_attr == _policy_obs2.edge_attr)
-        #     assert torch.all(_policy_obs.y == _policy_obs2.y)
-
-
-        logits = self.actor(policy_obs)
-
-        # print("logits", len(list(logits.flatten())), list(logits.flatten()))
-        
-        # actionノードの
-        batch_logits = torch.zeros([policy_obs.num_graphs, self.obs_shape]).to(device)
-        act_mask = torch.zeros([policy_obs.num_graphs, self.obs_shape]).to(device)
-        act_ids = torch.zeros([policy_obs.num_graphs, self.obs_shape]).to(device)
-        action_logits = torch.tensor([]).to(device)
-
-        shapes = torch.zeros([policy_obs.num_graphs]).to(device)
-
-        for b in range(policy_obs.num_graphs):
-            # get_policy_feature_graphのyにはidentifierが入っている
-            ids = policy_obs.y[policy_obs.batch == b].to(device)
-            # identifierが-1でないactionノードのみを取得
-            action_nodes = torch.where(ids != -1)[0].to(device)
-            # actionノードのnode_featureを取得
-            probs = logits[policy_obs.batch == b][action_nodes]
-            batch_logits[b, : probs.shape[0]] = probs.flatten()
-            # print("batch logits", batch_logits[b].mean(), batch_logits[b].std(), batch_logits[b].ent())
-            act_mask[b, : probs.shape[0]] = torch.tensor([True] * probs.shape[0])
-            act_ids[b, : action_nodes.shape[0]] = ids[action_nodes]
-            action_logits = torch.cat((action_logits, probs.flatten()), 0).reshape(-1)
-            shapes[b] = probs.shape[0]
-
-        # Sample from each set of probs using Categorical
-        # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
-        categoricals = CategoricalMasked(logits=batch_logits.to(device), masks=act_mask.to(device), device=device)
-        # categoricals = CategoricalMasked(logits=batch_logits.cpu(), masks=act_mask.cpu(), device='cpu')
-
-        # Convert the list of samples back to a tensor
-        # actionノードの
-        if action is None:
-            # NOTE: 確率処理
-            # action = categoricals.sample()
-            # 完全なマスク
-            while True:
-                action = categoricals.sample()
-                if all(action <= shapes):
-                    break
-            # print(f"action: {action}")
-            # exit(0)
-            batch_id = torch.arange(policy_obs.num_graphs)
-            action_id = act_ids[batch_id, action]
-
-        else:
-            action_id = torch.tensor([0]).to(device)
-            
-        if testing:
-            return action.T, action_id.T
-        
-        # logprob = categoricals.log_prob(action.cpu())
-        logprob = categoricals.log_prob(action.to(device))
-        entropy = categoricals.entropy()
-        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device), categoricals
 

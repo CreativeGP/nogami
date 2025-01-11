@@ -6,10 +6,10 @@ import torch
 import networkx as nx
 
 from src.util import Logger, forward_hook
-from src.agenv.zxopt_agent_base import AgentGNNBase, CategoricalMasked
+from src.agenv.zxopt_agent_base import AgentGNNBase, CategoricalMasked, PPGAgent
 
 # for ppg
-class AgentGNN3(AgentGNNBase):
+class AgentGNN3(AgentGNNBase,PPGAgent):
     def __init__(
         self,
         envs,
@@ -159,7 +159,7 @@ class AgentGNN3(AgentGNNBase):
         return values
     
 
-        # x: [Batch, Batch]
+    # x: [Batch, Batch]
     # エージェントが次にとりたいと考えている行動を取得する. ついでに付加的な情報も返す. 
     def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
         #  NOTE(cgp): vector envの場合、graphはリストになる. それぞれのgraphに対して特徴ベクトルを計算する.

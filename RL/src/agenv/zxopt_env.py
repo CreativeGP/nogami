@@ -230,15 +230,17 @@ class ZXEnvBase(gym.Env):
 
         # print(remaining_actions, " ", end="")
 
-
         # End episode if there are no remaining actions or Maximum Length Reached or Incorrect Action Selected
         if (
             remaining_actions == 0 or act_type == "STOP" #or self.episode_len == self.max_episode_len
-        ):  
+        ):
             # NOTE(cgp): 重要なSTOP報酬
             if self.args is not None and 'reward' in self.args and self.args.reward == 'sf':
                 # straightforward reward
                 reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-self.min_gates)/self.max_compression
+            elif self.args is not None and 'reward' in self.args and self.args.reward == 'no-stopreward':
+                # no stop reward
+                pass
             else:
                 # 終了時のゲート数と従来手法のゲート数の差
                 reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-new_gates)/self.max_compression
@@ -273,6 +275,7 @@ class ZXEnvBase(gym.Env):
                     "action_pattern": self.action_pattern,
                     "opt_episode_len": self.opt_episode_len - self.episode_len,
                     "episode_len": self.episode_len,
+                    "nstep": self.episode_len,
                     "pyzx_stats": self.pyzx_data,
                     "rl_stats": self.get_data(self.final_circuit),
                     "no_opt_stats": self.no_opt_stats,
@@ -318,7 +321,8 @@ class ZXEnvBase(gym.Env):
                 "iden_nodes": self.match_ids(),
                 "gf_nodes": self.gadget_info_dict,
                 "circuit_data": circuit_data,
-                'history': history
+                'history': history,
+                "nstep": self.episode_len,
             },
         )
 
@@ -960,6 +964,7 @@ class ZXEnvBase(gym.Env):
             "lcomp_nodes": self.match_lcomp(),
             "iden_nodes": self.match_ids(),
             "gf_nodes": self.gadget_info_dict,
+            "nstep": self.episode_len,
         }
 
 
@@ -1062,6 +1067,7 @@ class ZXEnv(ZXEnvBase):
             "iden_nodes": self.match_ids(),
             "gf_nodes": self.gadget_info_dict,
             "circuit_data": circuit_data,
+            "nstep": self.episode_len,
         }
 
 class ZXEnvForTest(ZXEnvBase):
@@ -1142,5 +1148,6 @@ class ZXEnvForTest(ZXEnvBase):
             "iden_nodes": self.match_ids(),
             "gf_nodes": self.gadget_info_dict,
             "circuit_data": circuit_data,
+            "nstep": self.episode_len,
         }
 

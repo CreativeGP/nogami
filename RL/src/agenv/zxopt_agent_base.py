@@ -84,3 +84,25 @@ class AgentGNNBase(nn.Module):
             if param.grad is not None:
                 logger.write_scalar(f'detailed_grads/{pascal_name}_mean', param.grad.abs().mean().item(), global_step, only_wandb=True)
                 logger.write_scalar(f'detailed_grads/{pascal_name}_std', param.grad.abs().std().item(), global_step, only_wandb=True)
+
+class PPOAgent(ABC):
+    @abstractmethod
+    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
+        pass
+    
+    @abstractmethod
+    def get_value(self, graph, info):
+        pass
+
+class PPGAgent(ABC):
+    @abstractmethod
+    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
+        pass
+    
+    @abstractmethod
+    def get_value_from_critic_head(self, graph, info):
+        pass
+    
+    @abstractmethod
+    def get_value_from_actor_head(self, graph, info):
+        pass

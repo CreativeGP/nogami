@@ -49,6 +49,7 @@ class Trajectory():
             self.infos.extend(self.next_info)
             self.dones[step] = self.next_done
 
+            # NOTE(cgp): 勾配はとらない
             with torch.no_grad():
                 action, logprob, _, logits, action_ids, _ = self.agent.get_next_action(self.next_s, self.next_info, device=self.device)
                 if self.collect_value:
@@ -58,6 +59,7 @@ class Trajectory():
             # print()
             # print("before env step")
             # print_random_states(show_hash=True)
+            # import sys; sys.exit(0)
 
             # 観測情報を取得 (s a r s')
             s_, r, done, deprecated, self.next_info = self.envs.step(action_ids.cpu().numpy())
@@ -101,6 +103,7 @@ class Trajectory():
         # self.timer.start()
 
         # bootstrap value if not done, implement GAE-Lambda advantage calculation
+        # NOTE(cgp): 勾配はとらない
         with torch.no_grad():
             next_value = self.agent.get_value(self.next_s, self.next_info).reshape(1, -1)
             if use_gae:

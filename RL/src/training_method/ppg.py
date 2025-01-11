@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.agenv.zxopt_agent import AgentGNN3
+from src.agenv.zxopt_agent_base import PPGAgent
 from src.training_method.ppo import PPO
 from src.util import Logger, Timer, rootdir, count_autograd_graph, for_minibatches
 
@@ -16,10 +16,10 @@ class PPG(PPO):
             self.state = 0
             self.info = 0
 
-    def __init__(self, envs, agent: AgentGNN3, args, run_name):
+    def __init__(self, envs, agent: PPGAgent, args, run_name):
         self.config: dict = {
             "ppo_epochs": 8,
-            "n_policy_phase": 4,
+            "n_policy_phase": 3, # RAM不足に注意
             "aux_epochs": 4,
             "kl": 'whole',
             "lr_aux_policy": args.learning_rate,
@@ -30,7 +30,7 @@ class PPG(PPO):
         self.lr_aux_value: float = args.learning_rate
         self.B: List[PPG.ReuseSample] = []
         super().__init__(envs, agent, args, run_name)
-        self.logger.write_dict("ppo", self.config)
+        self.logger.write_dict("ppg", self.config)
         print("PPG Config:", self.config)
 
 
