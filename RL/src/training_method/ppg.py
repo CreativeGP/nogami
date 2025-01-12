@@ -215,15 +215,6 @@ class PPG(PPO):
             self.traj.global_step,
         )
     
-    def calculate_kl(self, a_logprobs, b_logprobs):
-        logratio = a_logprobs - b_logprobs
-        ratio = logratio.exp()
-        if self.config["schulman_kl"]:
-            return ((ratio - 1) - logratio).mean()
-        else:
-            return (-logratio).mean()
-
-    
     def aux_network_update(self):
         B_states = np.array([sample.state for sample in self.B])
         B_infos = np.array([sample.info for sample in self.B])
@@ -232,17 +223,18 @@ class PPG(PPO):
 
         B_logprob = np.array([])
         B_pd = np.array([])
-        for inds in np.array_split(np.arange(len(self.B)), len(self.B) // self.args.minibatch_size + 1):
-            # 現在のπで計算
-            _,  _B_logprob, _, _, _, pd = self.agent.get_next_action(
-                B_states[inds],
-                B_infos[inds],
-                action=None,
-                device=self.device
-            )
-            # pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
-            B_logprob = np.concatenate([B_logprob, _B_logprob.detach().numpy()])
-            B_pd = np.concatenate([B_pd, pd])
+        with torch.no_grad():
+            for inds in np.array_split(np.arange(len(self.B)), len(self.B) // self.args.minibatch_size + 1):
+                # 現在のπで計算
+                _,  _B_logprob, _, _, _, pd = self.agent.get_next_action(
+                    B_states[inds],
+                    B_infos[inds],
+                    action=None,
+                    device=self.device
+                )
+                pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
+                B_logprob = np.concatenate([B_logprob, _B_logprob.detach().numpy()])
+                B_pd = np.concatenate([B_pd, pd])
         print(B_logprob.shape, B_logprob)
         B_logprob = torch.Tensor(B_logprob)
 
@@ -260,7 +252,7 @@ class PPG(PPO):
                     action=None,
                     device=self.device
                 )
-                # pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
+                pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
 
 
                 newvalue = self.agent.get_value_from_actor_head(states_batch, infos_batch)

@@ -314,7 +314,7 @@ class EthernalAgentBase(AgentGNNBase,ABC):
             entropy.to(device),
             action_logits.clone().detach().requires_grad_(True).reshape(-1, 1),
             action_id.T.to(device),
-            categoricals_action_only
+            categoricals #categoricals_action_only
         )
     
     def get_value(self, graph, info):

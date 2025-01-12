@@ -225,11 +225,12 @@ def tracefunc(frame, event, arg, indent=[0]):
     return tracefunc
 
 
-import sys
-from itertools import chain
-from collections import deque
 
 def compute_object_size(o, handlers={}):
+    import sys
+    from itertools import chain
+    from collections import deque
+
     dict_handler = lambda d: chain.from_iterable(d.items())
     all_handlers = {tuple: iter,
                     list: iter,
