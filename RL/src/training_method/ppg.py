@@ -240,7 +240,7 @@ class PPG(PPO):
                 action=None,
                 device=self.device
             )
-            pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
+            # pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
             B_logprob = np.concatenate([B_logprob, _B_logprob.detach().numpy()])
             B_pd = np.concatenate([B_pd, pd])
         print(B_logprob.shape, B_logprob)
@@ -260,7 +260,7 @@ class PPG(PPO):
                     action=None,
                     device=self.device
                 )
-                pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
+                # pd = [torch.distributions.Categorical(logits=logit) for logit in pd.logits]
 
 
                 newvalue = self.agent.get_value_from_actor_head(states_batch, infos_batch)

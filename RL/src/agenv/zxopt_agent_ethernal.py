@@ -249,6 +249,8 @@ class EthernalAgentBase(AgentGNNBase,ABC):
         action_logits = torch.tensor([]).to(device)
         shapes = torch.zeros([policy_obs.num_graphs]).to(device)
 
+        categoricals_action_only = []
+
         for b in range(policy_obs.num_graphs):
             # get_policy_feature_graphのyにはidentifierが入っている
             ids = policy_obs.y[policy_obs.batch == b].to(device)
@@ -278,6 +280,9 @@ class EthernalAgentBase(AgentGNNBase,ABC):
                 act_ids[b, : action_nodes_mask.shape[0]] = ids[action_nodes_mask]
                 action_logits = torch.cat((action_logits, probs.flatten()), 0).reshape(-1)
                 shapes[b] = probs.shape[0]
+            categoricals_action_only.append(
+                torch.distributions.Categorical(logits=probs.flatten().to(device))
+            )
 
         # Sample from each set of probs using Categorical
         # NOTE(cgp): 乱数アルゴリズムが異なり、とりあえず、乱数を合わせるために
@@ -303,7 +308,14 @@ class EthernalAgentBase(AgentGNNBase,ABC):
         # logprob = categoricals.log_prob(action.cpu())
         logprob = categoricals.log_prob(action.to(device))
         entropy = categoricals.entropy()
-        return action.T.to(device), logprob.to(device), entropy.to(device), action_logits.clone().detach().requires_grad_(True).reshape(-1, 1), action_id.T.to(device), categoricals
+        return (
+            action.T.to(device),
+            logprob.to(device),
+            entropy.to(device),
+            action_logits.clone().detach().requires_grad_(True).reshape(-1, 1),
+            action_id.T.to(device),
+            categoricals_action_only
+        )
     
     def get_value(self, graph, info):
         if not isinstance(graph,(tuple,list,np.ndarray)):
