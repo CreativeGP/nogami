@@ -555,11 +555,12 @@ class PPGEthernalAgent(EthernalAgentBase,PPGAgent):
         envs,
         device,
         args=None,
+        nstep=10,
         c_hidden=32,
         c_hidden_v=32,
         **kwargs,
     ):
-        super().__init__(envs, device, args)
+        super().__init__(envs, device, args, nstep)
 
         c_in_p = 16
         c_in_v = 11
