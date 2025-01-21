@@ -12,7 +12,7 @@ from distutils.util import strtobool
 from torch_geometric.data import Batch, Data
 
 
-from src.util import Logger, Timer, rootdir, count_autograd_graph, for_minibatches, print_grad_summary, print_random_states, print_grads, print_weights
+from src.util import Logger, Timer, rootdir, show_autograd_graph, count_autograd_graph, for_minibatches, print_grad_summary, print_random_states, print_grads, print_weights
 from src.training_method.trajectory import Trajectory
 
 class PPO():
@@ -122,6 +122,12 @@ class PPO():
             self.traj.calculate_advantages(self.args.gamma, self.args.gae, self.args.gae_lambda)
             # old_params = [param.clone() for param in self.agent.parameters()]
 
+            import pickle
+            (states, rets) = pickle.load(open(f"training_ds/step_{update}.pkl", "rb"))
+            print(rets, self.traj.b_returns)            
+            # import pickle
+            # pickle.dump((self.traj.states, self.traj.b_returns), open(f"training_ds/step_{update}.pkl", "wb"))
+
             self.update_networks()
 
             # new_params = [param.clone() for param in self.agent.parameters()]
@@ -164,6 +170,12 @@ class PPO():
         # print("rewards", (self.traj.b_rewards.tolist()))
         # print("values", (self.traj.b_values.tolist()))
         # print("advantages", (self.traj.b_advantages.tolist()))
+        def flat_grads(model):
+            return torch.cat([p.grad.view(-1) for p in model.parameters()])
+
+
+        last_grad = None
+        traj = []
 
         # Optimizing the policy and value network
         b_inds = np.arange(self.args.batch_size)  
@@ -237,9 +249,16 @@ class PPO():
                 # return
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.agent.parameters(), self.args.max_grad_norm)
+                # print_random_states(True)
                 self.optimizer.step()
                 # print(v_loss)
+                # print(count_autograd_graph(v_loss.grad_fn))
+                # show_autograd_graph(v_loss.grad_fn)
                 # print_grad_summary(self.agent)
+                grad = flat_grads(self.agent)
+                if last_grad is not None:
+                    traj += [torch.dot(last_grad, grad)/torch.norm(last_grad)/torch.norm(grad)]
+                last_grad = grad.clone()
 
             if self.args.target_kl is not None:
                 if approx_kl > self.args.target_kl:
@@ -247,6 +266,10 @@ class PPO():
             self.timer.stop()
         print(self.timer)
         self.timer.clear()
+        
+        # from matplotlib import pyplot as plt
+        # plt.plot(traj)
+        # plt.show()
 
 
         # logging
