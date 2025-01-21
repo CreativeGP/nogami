@@ -292,9 +292,10 @@ class PPO():
             ),
             self.traj.global_step,
         )
+        # remove logits element less than -1e7
         self.logger.writer.add_histogram(
             "histograms/logits",
-            logits.cpu()
+            logits[logits >= -1e7].cpu()
             .detach()
             .numpy()
             .reshape(

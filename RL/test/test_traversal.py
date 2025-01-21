@@ -10,9 +10,8 @@ from torch_geometric.data import Batch, Data
 
 # NOTE(cgp): あまりよくないらしいけど、ルートモジュールより上を経由するにはこうするしかないかも
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.util import rootdir, CustomizedSyncVectorEnv
+from src.util import rootdir, CustomizedSyncVectorEnv, ActionHistory
 from src.agenv.zxopt_agent import get_agent_from_state_dict
-from src.agenv.zxopt_env import ActionHistory
 
 global device
 
