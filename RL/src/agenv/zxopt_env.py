@@ -18,27 +18,17 @@ from pyzx.simplify import apply_rule, pivot
 from pyzx.symbolic import Poly
 from pyzx.utils import EdgeType, VertexType, toggle_edge
 
-from src.util import rootdir, print_random_states
-
-class ActionHistory():
-    def __init__(self):
-        self.vs: list[int] = []
-        self.act: str = ""
-        self.gate_reduction: int = 0
-        self.reward: int = 0
-        self.V: int = 0
-        self.A: int = 0
-        self.logp: float = 0
-    
-    def __repr__(self):
-        return f"{self.act}{self.vs}(gr={self.gate_reduction}, R={self.reward}, V={self.V:.3f}, p={np.exp(self.logp):.3f})"
+from src.util import rootdir, print_random_states, ActionHistory
 
 def handler(signum, frame):
     print("Teleport Reduce Fails")
     raise Exception("end of time")
 
 class ZXEnvBase(gym.Env):
-    def __init__(self, silent: bool = False, args: argparse.Namespace = None):
+    def __init__(
+            self,
+            silent: bool = False,
+            args: argparse.Namespace = None):
         # self.device = "cuda"
         self.silent = silent
         self.args = args
@@ -53,7 +43,7 @@ class ZXEnvBase(gym.Env):
         # d["had"] = hadamards
         # d["twoqubits"] = twoqubits
         # self.gate_type = "gates"
-
+        self.episode_len = 0
         self.max_episode_len = 75
         self.cumulative_reward_episodes = 0
         self.win_episodes = 0
@@ -289,6 +279,7 @@ class ZXEnvBase(gym.Env):
                     "min_gates": self.min_gates,
                     #"graph_obs": [self.policy_obs(), self.value_obs()],
                     "final_circuit": self.final_circuit,
+                    "final_graph": self.graph,
                     "action_stats": [self.best_action_stats["pivb"], 
                                      self.best_action_stats["pivg"],
                                      self.best_action_stats["piv"],
@@ -297,7 +288,12 @@ class ZXEnvBase(gym.Env):
                                      self.best_action_stats["gf"]],
                     "depth": self.final_circuit.depth(),
                     "initial_depth": self.initial_depth,
-                    'history': history
+                    'history': history,
+
+                    "piv_nodes": self.pivot_info_dict,
+                    "lcomp_nodes": self.match_lcomp(),
+                    "iden_nodes": self.match_ids(),
+                    "gf_nodes": self.gadget_info_dict,
 
                 },
             )

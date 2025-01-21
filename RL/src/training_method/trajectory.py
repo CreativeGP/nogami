@@ -64,7 +64,7 @@ class Trajectory():
             # 観測情報を取得 (s a r s')
             s_, r, done, deprecated, self.next_info = self.envs.step(action_ids.cpu().numpy())
 
-            self.rewards[step] = torch.tensor(r).to(self.device).view(-1)
+            self.rewards[step] = torch.tensor(self.agent.get_rewards(r,self.next_info)).to(self.device).view(-1)
             self.next_done = torch.Tensor(done).to(self.device)
             self.next_s = s_
 
