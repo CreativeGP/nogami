@@ -1,3 +1,15 @@
+python3 ppo.py --exp-name training --learning-rate 1e-3 --total-timesteps 15000000 --num-envs=8 --anneal-lr True --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9
 python main.py --exp-name paper --learning-rate 1e-3 --total-timesteps 15000000 --num-envs=8 --anneal-lr True --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9
 python main.py --exp-name paper-cpu --cuda False --learning-rate 1e-3 --total-timesteps 15000000 --num-envs=8 --anneal-lr True --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9
 python main.py --exp-name b-seed-146-add --cuda False --learning-rate 2e-4 --num-envs=8 --anneal-lr False --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9 --total-timesteps 15000000  --global-step 8359936 --checkpoint checkpoints/state_dict_zx-v0__b-seed-146__lavie__146__1731799751_8359936_model5x70_gates_new.pt --seed 146 > b-seed-146-add
+python main.py --exp-name b-ppg-05clone --cuda False --learning-rate 1e-3 --total-timesteps 15000000 --num-envs=8 --anneal-lr True --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9 --agent ppg --training ppg --use-wandb True
+
+
+python main.py --exp-name b-ppg-3clone-add --cuda False --learning-rate 3e-4 --total-timesteps 85000000 --num-envs=8 --anneal-lr False --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9 --agent ppg --training ppg --use-wandb True --global-step 5529600 --checkpoint checkpoints/state_dict_zx-v0__b-ppg-3clone__ns3133444__8983440__1736055551_5529600_model5x70_gates_new.pt
+
+python main.py --exp-name b-eth-ppg --cuda False --learning-rate 1e-3 --total-timesteps 15000000 --num-envs=8 --anneal-lr True --update-epochs 8 --max-grad-norm 0.5 --num-steps 512 --num-minibatches 32 --vf-coef 0.5 --ent-coef 0.01 --clip-vloss True --clip-coef 0.1 --gamma 0.995 --gae-lambda 0.9 --reward no-stopreward --agent ppg-ethernal  --training ppg 
+
+checkpoints/state_dict_zx-v0__b-eth__win__8983440__1736665149_7331840_model5x70_gates_new.pt
+checkpoints/state_dict_zx-v0__b-eth-ppg__ns3133444__8983440__1736612368_1269760_model5x70_gates_new.pt
+checkpoints/state_dict_zx-v0__b-ppg-3clone__ns3133444__8983440__1736055551_5283840_model5x70_gates_new.pt
+checkpoints/state_dict_zx-v0__b-eth-ppg__ns3133444__8983440__1736612368_9338880_model5x70_gates_new.pt

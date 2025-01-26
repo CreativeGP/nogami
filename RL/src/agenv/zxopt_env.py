@@ -1213,7 +1213,7 @@ class CZXStepMixin():
         graph.normalize()
         
         try:
-            import czx_nano as czx
+            import czx_nano.czx_ext as czx
             circuit_data = czx.extract_and_basic_optimization(graph)
             new_gates = circuit_data[self.gate_type]
         except Exception as e:
@@ -1365,8 +1365,8 @@ class CZXStepMixin():
             },
         )
 
-class CZXEnv(ZXEnv, CZXStepMixin):
+class CZXEnv(CZXStepMixin, ZXEnv):
     pass
 
-class CZXEnvForTest(ZXEnvForTest, CZXStepMixin):
+class CZXEnvForTest(CZXStepMixin, ZXEnvForTest):
     pass
