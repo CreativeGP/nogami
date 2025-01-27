@@ -18,27 +18,17 @@ from pyzx.simplify import apply_rule, pivot
 from pyzx.symbolic import Poly
 from pyzx.utils import EdgeType, VertexType, toggle_edge
 
-from src.util import rootdir, print_random_states
-
-class ActionHistory():
-    def __init__(self):
-        self.vs: list[int] = []
-        self.act: str = ""
-        self.gate_reduction: int = 0
-        self.reward: int = 0
-        self.V: int = 0
-        self.A: int = 0
-        self.logp: float = 0
-    
-    def __repr__(self):
-        return f"{self.act}{self.vs}(gr={self.gate_reduction}, R={self.reward}, V={self.V:.3f}, p={np.exp(self.logp):.3f})"
+from src.util import rootdir, print_random_states, ActionHistory
 
 def handler(signum, frame):
     print("Teleport Reduce Fails")
     raise Exception("end of time")
 
 class ZXEnvBase(gym.Env):
-    def __init__(self, silent: bool = False, args: argparse.Namespace = None):
+    def __init__(
+            self,
+            silent: bool = False,
+            args: argparse.Namespace = None):
         # self.device = "cuda"
         self.silent = silent
         self.args = args
@@ -53,7 +43,7 @@ class ZXEnvBase(gym.Env):
         # d["had"] = hadamards
         # d["twoqubits"] = twoqubits
         # self.gate_type = "gates"
-
+        self.episode_len = 0
         self.max_episode_len = 75
         self.cumulative_reward_episodes = 0
         self.win_episodes = 0
@@ -289,6 +279,7 @@ class ZXEnvBase(gym.Env):
                     "min_gates": self.min_gates,
                     #"graph_obs": [self.policy_obs(), self.value_obs()],
                     "final_circuit": self.final_circuit,
+                    "final_graph": self.graph,
                     "action_stats": [self.best_action_stats["pivb"], 
                                      self.best_action_stats["pivg"],
                                      self.best_action_stats["piv"],
@@ -297,7 +288,12 @@ class ZXEnvBase(gym.Env):
                                      self.best_action_stats["gf"]],
                     "depth": self.final_circuit.depth(),
                     "initial_depth": self.initial_depth,
-                    'history': history
+                    'history': history,
+
+                    "piv_nodes": self.pivot_info_dict,
+                    "lcomp_nodes": self.match_lcomp(),
+                    "iden_nodes": self.match_ids(),
+                    "gf_nodes": self.gadget_info_dict,
 
                 },
             )
@@ -1151,3 +1147,226 @@ class ZXEnvForTest(ZXEnvBase):
             "nstep": self.episode_len,
         }
 
+
+# 少し早いczx実装を使うmixin
+class CZXStepMixin():
+    def manual_step(self, act_type, vs):
+        if len(vs) == 1:
+            act_node1 = vs[0]
+        elif len(vs) == 2:
+            act_node1 = vs[0]
+            act_node2 = vs[1]
+
+
+        # Update Stats
+        self.render_flag = 1
+        self.episode_len += 1
+        reward = 0
+        done = False
+        
+
+        if act_type == "LC":
+            
+            self.apply_rule(*self.lcomp(act_node1))
+            action_id = 1
+            node = [act_node1]
+            
+        elif act_type == "ID":
+            
+            neighbours = list(self.graph.neighbors(act_node1))
+            types = self.graph.types()
+            self.apply_rule(*self.remove_ids(act_node1))
+            if types[neighbours[0]] != zx.VertexType.BOUNDARY and types[neighbours[1]] != zx.VertexType.BOUNDARY:
+                self.apply_rule(*self.spider_fusion(neighbours))
+            action_id = 3
+            node = [act_node1]
+            
+        elif act_type == "PV" or act_type == "PVG" or act_type == "PVB":
+            
+            pv_type = self.pivot_info_dict[(act_node1, act_node2)][-1]
+            if pv_type == 0:
+                self.apply_rule(*self.pivot(act_node1, act_node2))
+            else:
+                self.apply_rule(*self.pivot_gadget(act_node1, act_node2))
+            action_id = 2
+            node = [act_node1, act_node2]
+            
+        elif act_type == "GF":
+            self.apply_rule(*self.merge_phase_gadgets(act_node1))
+            action_id = 6
+            node = act_node1
+            
+        elif act_type == "STOP":
+            action_id = 0
+            node = [-1]
+            
+        else:
+            action_id = 5  
+            reward = 0.0
+            node = [-1]
+            
+       
+        # NOTE(cgp): 自己コピーでほかの参照を切ってる、それやるならapply_ruleの前でやれという気持ちもある
+        # NOTE(cgp): これは、BaseGraph.copyを呼んでるけど、このメゾットは行儀が悪くてコピーだけしてるわけじゃないことに注意
+        self.graph = self.graph.copy() #Relabel nodes due to PYZX not keeping track of node id properly.
+        graph = self.graph.copy()
+        graph.normalize()
+        
+        try:
+            import czx_nano.czx_ext as czx
+            circuit_data = czx.extract_and_basic_optimization(graph)
+            new_gates = circuit_data[self.gate_type]
+        except Exception as e:
+            # NOTE(cgp): ここがnanバグの温床でした。回路が復元できないような操作はSTOPになるんだけど、
+            # それにたいしてペナルティを設定したかったのかわからんけど、infだとアドバンテージの計算でnanになる
+            # そして、勾配計算もnanになる.
+            # なんでdev=cpuで発生するのかはわからんけど... 別にdev=cudaでもここを通れば発生すると思うんだけど
+            # new_gates = np.inf
+            new_gates = self.current_gates
+            print(self.action_pattern, [act_type, new_gates-self.current_gates, vs])
+            act_type = "STOP"
+            print("error", e)
+            # import pickle; pickle.dump(self.init_graph, open("graph.pkl", "wb"))
+            # import sys; sys.exit()
+        
+        self.action_pattern.append([act_type, new_gates-self.current_gates, vs])
+        reward = 0
+        # NOTE(cgp): エピソード中で最小のゲート数のものを出力とする
+        if new_gates < self.min_gates:
+            self.min_gates = new_gates
+            self.final_circuit_data = circuit_data            
+            
+        if new_gates <= self.min_gates:
+            self.opt_episode_len = self.episode_len
+            self.best_action_stats = copy.deepcopy(self.episode_stats)
+
+        # NOTE(cgp): 報酬の設定 削減率(self.max_compression = 55)
+        reward += (self.current_gates - new_gates) / self.max_compression
+        self.episode_reward += reward
+        # print(self.current_gates, new_gates, reward, self.episode_reward)
+
+        self.pivot_info_dict = self.match_pivot_parallel() | self.match_pivot_boundary() | self.match_pivot_gadget()
+        self.gadget_info_dict, self.gadgets = self.match_phase_gadgets()
+        self.gadget_fusion_ids = list(self.gadget_info_dict)
+        # Obtain Length of Remaining Actions:
+        remaining_pivot = len(self.pivot_info_dict.keys())
+        remaining_lcomp = len(self.match_lcomp())
+        remaining_ids = len(self.match_ids())
+        remaining_gadget_fusions = len(self.gadget_fusion_ids)
+        remaining_actions = remaining_pivot + remaining_lcomp + remaining_ids + remaining_gadget_fusions
+        
+        history = ActionHistory()
+        history.act = act_type
+        if 'act_node1' in locals():
+            history.vs.append(act_node1)
+        if 'act_node2' in locals():
+            history.vs.append(act_node2)
+        history.gate_reduction = new_gates - self.current_gates
+        history.reward = reward
+
+        # print(remaining_actions, " ", end="")
+
+        # End episode if there are no remaining actions or Maximum Length Reached or Incorrect Action Selected
+        if (
+            remaining_actions == 0 or act_type == "STOP" #or self.episode_len == self.max_episode_len
+        ):
+            # NOTE(cgp): 重要なSTOP報酬
+            if self.args is not None and 'reward' in self.args and self.args.reward == 'sf':
+                # straightforward reward
+                reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-self.min_gates)/self.max_compression
+            elif self.args is not None and 'reward' in self.args and self.args.reward == 'no-stopreward':
+                # no stop reward
+                pass
+            elif self.args is not None and 'agent' in self.args and (self.args.agnet == 'ppo-ethernal' or self.args.agent == 'ppg-ethernal'):
+                # no stop reward
+                pass
+            else:
+                # 終了時のゲート数と従来手法のゲート数の差
+                reward += (min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type])-new_gates)/self.max_compression
+
+            history.reward = reward
+
+            self.current_gates = new_gates
+            
+            # RL vs PyZX Simplication -> BO, BO, Initial
+            if self.min_gates < min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type]):
+                win_vs_pyzx = 1
+            elif self.min_gates == min(self.pyzx_gates, self.basic_opt_data[self.gate_type], self.initial_stats[self.gate_type]):
+                win_vs_pyzx = 0
+            else:
+                win_vs_pyzx = -1
+            
+            done = True
+
+            if not self.silent:
+                print("Win vs Pyzx: ", win_vs_pyzx, " Episode Gates: ", self.min_gates, "Cflow_gates: ", self.pyzx_gates, "Episode Len", self.episode_len, "Opt Episode Len", self.opt_episode_len)
+            return (
+                self.graph,
+                reward,
+                done,
+                False,
+                {
+                    "action": action_id,
+                    "remaining_lcomp_size": remaining_lcomp,
+                    "remaining_pivot_size": remaining_pivot,
+                    "remaining_id_size": remaining_ids,
+                    "max_reward_difference": self.max_reward,
+                    "action_pattern": self.action_pattern,
+                    "opt_episode_len": self.opt_episode_len - self.episode_len,
+                    "episode_len": self.episode_len,
+                    "nstep": self.episode_len,
+                    "pyzx_stats": self.pyzx_data,
+                    "rl_stats": self.final_circuit_data,
+                    "no_opt_stats": self.no_opt_stats,
+                    "swap_cost": self.swap_cost,
+                    "pyzx_swap_cost": self.pyzx_swap_cost,
+                    "pyzx_gates": self.pyzx_gates,
+                    "rl_gates": self.final_circuit_data[self.gate_type],
+                    "bo_stats": self.basic_opt_data,
+                    "initial_stats": self.initial_stats,
+                    "win_vs_pyzx": win_vs_pyzx,
+                    "min_gates": self.min_gates,
+                    #"graph_obs": [self.policy_obs(), self.value_obs()],
+                    # "final_circuit": self.final_circuit,
+                    "action_stats": [self.best_action_stats["pivb"], 
+                                     self.best_action_stats["pivg"],
+                                     self.best_action_stats["piv"],
+                                     self.best_action_stats["lc"],
+                                     self.best_action_stats["id"],
+                                     self.best_action_stats["gf"]],
+                    "depth": self.final_circuit_data['depth'],
+                    "initial_depth": self.initial_depth,
+                    'history': history
+
+                },
+            )
+
+
+
+        self.current_gates = new_gates
+
+        return (
+            self.graph,
+            reward,
+            done,
+            False,
+            {
+                "action": action_id,
+                "nodes": node,
+                #"graph_obs": [self.policy_obs(), self.value_obs()],
+                # 前計算
+                "piv_nodes": self.pivot_info_dict,
+                "lcomp_nodes": self.match_lcomp(),
+                "iden_nodes": self.match_ids(),
+                "gf_nodes": self.gadget_info_dict,
+                "circuit_data": circuit_data,
+                'history': history,
+                "nstep": self.episode_len,
+            },
+        )
+
+class CZXEnv(CZXStepMixin, ZXEnv):
+    pass
+
+class CZXEnvForTest(CZXStepMixin, ZXEnvForTest):
+    pass

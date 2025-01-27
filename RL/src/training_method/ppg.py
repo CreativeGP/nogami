@@ -206,7 +206,7 @@ class PPG(PPO):
         )
         self.logger.writer.add_histogram(
             "histograms/logits",
-            logits.cpu()
+            logits[logits >= -1e7].cpu()
             .detach()
             .numpy()
             .reshape(

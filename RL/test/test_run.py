@@ -173,7 +173,7 @@ def get_results(agent,i):
         exp_logits = np.exp(action_logits - np.max(action_logits))
         p = exp_logits / exp_logits.sum()
 
-        print(history, np.sort(p)[::-1][:5])
+        print(count+1, history, np.sort(p)[::-1][:5])
         # print(state[0].graph)
         count += 1
     end = time.time()

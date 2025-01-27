@@ -152,11 +152,9 @@ class AgentGNN1(AgentGNNBase,PPOAgent):
         self.detailed_weight_logs(logger, global_step)
         self.detailed_grad_logs(logger, global_step)
 
-
-
     # x: [Batch, Batch]
     # エージェントが次にとりたいと考えている行動を取得する. ついでに付加的な情報も返す. 
-    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
+    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False, deterministic=False):
         #  NOTE(cgp): vector envの場合、graphはリストになる. それぞれのgraphに対して特徴ベクトルを計算する.
         # この場合, policy_obsはtorch_geometric.data.Batchという形になる.
         # この Batch は、複数のグラフをまとめて扱うためのクラスで、これをself.actor()に入力することで、envs分のlogitsが得られる.
@@ -213,13 +211,16 @@ class AgentGNN1(AgentGNNBase,PPOAgent):
         # Convert the list of samples back to a tensor
         # actionノードの
         if action is None:
-            # NOTE: 確率処理
-            # action = categoricals.sample()
-            # 完全なマスク
-            while True:
-                action = categoricals.sample()
-                if all(action <= shapes):
-                    break
+            if deterministic:
+                action = torch.max(batch_logits, axis=-1).indices
+            else:
+                # NOTE: 確率処理
+                # action = categoricals.sample()
+                # 完全なマスク
+                while True:
+                    action = categoricals.sample()
+                    if all(action <= shapes):
+                        break
             # print(f"action: {action}")
             # exit(0)
             batch_id = torch.arange(policy_obs.num_graphs)

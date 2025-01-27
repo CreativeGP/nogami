@@ -1,4 +1,11 @@
 __pycache__/
 pickles/
 RL/src/pyzx/
+RL/training_ds/
+RL/wandb/
+RL/test/grading_data/
+RL/checkpoints/*
+!RL/checkpoints/shared/
+!RL/checkpoints/shared/*
 RL/runs/
+*.pyc

@@ -1,4 +1,4 @@
-import os, sys, argparse, copy
+import os, sys, argparse, copy, random
 from distutils.util import strtobool
 from dataclasses import dataclass
 from typing import List
@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 # NOTE(cgp): あまりよくないらしいけど、ルートモジュールより上を経由するにはこうするしかないかも
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.util import rootdir, CustomizedSyncVectorEnv, for_minibatches, print_weight_summary, forward_hook, print_weights, print_grads, print_grad_summary, register_all_forward_hooks
+from src.util import rootdir, CustomizedSyncVectorEnv, for_minibatches, print_weight_summary, forward_hook, print_weights, print_grads, print_grad_summary, register_all_forward_hooks, register_all_backward_hooks, print_random_states, count_autograd_graph
 from src.agenv.zxopt_agent import get_agent_from_state_dict
 from src.agenv.zxopt_env import ZXEnvForTest
 
@@ -241,41 +241,51 @@ class GATv2(nn.Module):
                 #     "x, edge_index -> x",
                 # ),
                 # nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_in_v, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
-                (
-                    geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
-                    "x, edge_index, edge_attr -> x",
-                ),
-                nn.ReLU(),
                 # (
-                #     geom_nn.GINConv(nn=nn.Sequential(
-                #         nn.Linear(c_in_p, c_hidden),
-                #         nn.ReLU(),
-                #         nn.Linear(c_hidden, c_hidden),
-                #         nn.ReLU(),
-                #     )),
-                #     "x, edge_index -> x",
+                #     geom_nn.GATv2Conv(c_in_v, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                #     "x, edge_index, edge_attr -> x",
                 # ),
                 # nn.ReLU(),
+                # (
+                #     geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                #     "x, edge_index, edge_attr -> x",
+                # ),
+                # nn.ReLU(),
+                # (
+                #     geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                #     "x, edge_index, edge_attr -> x",
+                # ),
+                # nn.ReLU(),
+                # (
+                #     geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                #     "x, edge_index, edge_attr -> x",
+                # ),
+                # nn.ReLU(),
+                # (
+                #     geom_nn.GATv2Conv(c_hidden, c_hidden, edge_dim=edge_dim_v, add_self_loops=True),
+                #     "x, edge_index, edge_attr -> x",
+                # ),
+                # nn.ReLU(),
+                (
+                    geom_nn.GINConv(nn=nn.Sequential(
+                        nn.Linear(c_in_p, c_hidden),
+                        nn.ReLU(),
+                        # nn.Linear(c_hidden, c_hidden),
+                        # nn.ReLU(),
+                    )),
+                    "x, edge_index -> x",
+                ),
+                nn.ReLU(),
+                (
+                    geom_nn.GINConv(nn=nn.Sequential(
+                        nn.Linear(c_hidden, c_hidden),
+                        nn.ReLU(),
+                        # nn.Linear(c_hidden, c_hidden),
+                        # nn.ReLU(),
+                    )),
+                    "x, edge_index -> x",
+                ),
+                nn.ReLU(),
 
             ],
         )
@@ -554,7 +564,8 @@ class GATv2(nn.Module):
         return torch_geometric.data.Data(
             x=x_value, 
             edge_index=edge_index_value, 
-            edge_attr=edge_features)
+            edge_attr=edge_features
+        )
 
 
 @dataclass
@@ -582,12 +593,26 @@ def get_current_value_trace(states):
         vs = model.critic(torch_geometric.data.Batch.from_data_list(nxlist)).detach()
         values += vs
     return values
+def flat_grads(model):
+    return torch.cat([p.grad.view(-1) for p in model.parameters()])
 
 if __name__ == "__main__":
     # warnings.filterwarnings("ignore", category=UserWarning)
 
+    seed = 8983440
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.deterministic = True
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+
+
     env = ZXEnvForTest(None, "gates")
-    model = GATv2()
+    model = GATv2().to('cpu')
+    print(model)
 
     # model.load_state_dict(torch.load("/home/wsl/Research/nogami/zx/RL/checkpoints/state_dict_zx-v0__b-seed-146__lavie__146__1731799751_8359936_model5x70_gates_new.pt"), strict=False)
 
@@ -605,40 +630,47 @@ if __name__ == "__main__":
     #             states = states[0:N]
     #             break
     lr = 1e-3
-    optimizer = optim.Adam(model.parameters(), lr=lr, eps=1e-5, weight_decay=0.2)
+    optimizer = optim.Adam(model.parameters(), lr=lr, eps=1e-5)
 
     for i in range(13):
         states = []
-        with open(f"/home/wsl/Research/nogami/zx/RL/training_ds/step_{i}.pkl", 'rb') as f:
+        with open(f"/home/wsl/Research/nogami/zx/RL/training_ds/step_3.pkl", 'rb') as f:
             import pickle
             _states, _returns = pickle.load(f)
             for s,r in zip(_states,_returns):
                 env.graph = s
                 i = env.get_info()
-                # states.append(State(s, model.get_policy_feature_graph(s,i), i, r))
-                states.append(State(s, model.get_value_feature_graph(s), i, r))
+                states.append(State(s, model.get_policy_feature_graph(s,i), i, r))
+                # states.append(State(s, model.get_value_feature_graph(s), i, r))
             N=len(states)
         
         states = np.array(states)
 
+        last_grad = None
+        traj = []
 
         clip_coef = 0.1
         minibatch = 128
         for update in range(1):
+            b_inds = np.arange(N)  
             for epoch in range(8):
                 print("Epoch", epoch)
 
                 # old_values = torch.Tensor(get_current_value_trace(states))
+                np.random.shuffle(b_inds)  
 
                 y_pred = np.array([])
                 y_true = np.array([])
-                for mb_inds in for_minibatches(N, minibatch):
+                for start in range(0, N, minibatch):
+                    end = start + minibatch
+                    mb_inds = b_inds[start:end]
                     mb_states = states[mb_inds]
                     mb_inputs = [s.nxfeat for s in mb_states]
                     mb_returns = torch.Tensor([s.ret for s in mb_states])
 
                     values = model.critic(torch_geometric.data.Batch.from_data_list(mb_inputs))
-                    
+                    values = values.squeeze(-1)
+
                     clip_vloss=False
                     if clip_vloss:
                         v_loss_unclipped = (values - mb_returns) ** 2
@@ -661,10 +693,18 @@ if __name__ == "__main__":
                     optimizer.zero_grad()
                     v_loss.backward()
                     nn.utils.clip_grad_norm_(model.parameters(), clip_coef)
+                    # print()
+                    # print_random_states(True)
                     optimizer.step()
-                    print(v_loss)
+                    # print(v_loss)
+                    # print(count_autograd_graph(v_loss.grad_fn))
                     # print(values)
-                    print_grad_summary(model)
+                    # print_grad_summary(model)
+
+                    grad = flat_grads(model)
+                    if last_grad is not None:
+                        traj += [torch.dot(last_grad, grad)/torch.norm(last_grad)/torch.norm(grad)]
+                    last_grad = grad.clone()
 
                     y_pred = np.concatenate((y_pred,values.detach()), axis=None)
                     y_true = np.concatenate((y_true,mb_returns), axis=None)
@@ -690,4 +730,6 @@ if __name__ == "__main__":
                 x_min, x_max = plt.xlim()
                 # ylimをx軸の範囲と同じに設定
                 plt.ylim(x_min, x_max)
-                plt.show()
+                # plt.show()
+            plt.plot(traj)
+            # plt.show()

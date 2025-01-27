@@ -31,7 +31,8 @@ def parse_args():
         help="the number of episodes to run")
     parser.add_argument("--gym-id", type=str, default="zx-v0",
         help="the id of the gym environment")
-    
+    parser.add_argument("--stop-at", type=int, default=-1, help="RLエージェントが終了する操作数を強制的に設定する")
+
     parser.add_argument("--qubit", type=int, default=-1, help="指定がなければすべてのqubitについて評価します.")
     parser.add_argument("--depth", type=int, default=-1,)
 
@@ -125,12 +126,18 @@ def get_results(param):
         obs0, reset_info = envs.reset()
         full_reduce_time.append(reset_info[0]["full_reduce_time"])
         state, info = [reset_info[0]["graph_obs"]], reset_info
-
+        
+        count = 0
         start = time.time()
         while not done:
-            action, _, _, _, action_id, _ = agent.get_next_action(state, info, device=device)
+            action, logp, entropy, action_logits, action_id, _ = agent.get_next_action(state, info, device=device, mask_stop=args.stop_at > 0, )
             action = action.flatten()
-            state, reward, done, deprecated, info = envs.step(action_id.cpu().numpy())
+            if args.stop_at > 0 and count >= args.stop_at:
+                # 強制終了
+                state, reward, done, deprecated, info = envs.step(np.array([0]*args.num_envs))
+            else:
+                state, reward, done, deprecated, info = envs.step(action_id.cpu().numpy())
+            count += 1
         end = time.time()
 
         rl_time.append(end - start)
@@ -221,7 +228,7 @@ if __name__ == "__main__":
     gym.envs.registration.register(
         id='zx-v0',
         # entry_point=lambda qubit, depth: ZXEnv(qubit, depth),
-        entry_point=f"src.agenv.zxopt_env:ZXEnv",
+        entry_point=f"src.agenv.zxopt_env:CZXEnv",
     )
 
     device = torch.device("cuda") if torch.cuda.is_available() and args.cuda else torch.device("cpu")

@@ -38,6 +38,17 @@ class EthernalAgentBase(AgentGNNBase,ABC):
     def critic(self, x):
         pass
 
+    # NOTE: stop時のrewardはstate valueに補正する
+    # gym.Env.step()の仕様に注意 https://sourcegraph.com/github.com/Farama-Foundation/Gymnasium/-/blob/gymnasium/vector/async_vector_env.py?L776#:~:text=info%20%3D%20%7B-,%22final_info%22%3A%20info%2C,-%22final_obs%22%3A
+    def get_rewards(self, rewards: list, next_info: list[dict]) -> list:
+        res = []
+        for i, info in enumerate(next_info):
+            if 'final_info' in info and info['final_info'] is not None:
+                res.append(self.get_value(info['final_info']['final_graph'], info['final_info']).item())
+            else:
+                res.append(rewards[i])
+        return res
+    
     # zxdiagramから(node_features, edge_index, edge_features、identifier)を作成して、torch.tensorで返す
     # node_features: [位相情報18個, 入力境界？, 出力境界？, フェーズガジェット？, 行動用ノードのための情報...]
     # edge_features: [普通のエッジ、lcomp, ident, pivot, fusion, stop]
@@ -215,7 +226,7 @@ class EthernalAgentBase(AgentGNNBase,ABC):
 
         # x: [Batch, Batch]
     # エージェントが次にとりたいと考えている行動を取得する. ついでに付加的な情報も返す. 
-    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
+    def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False, deterministic=False):
         #  NOTE(cgp): vector envの場合、graphはリストになる. それぞれのgraphに対して特徴ベクトルを計算する.
         # この場合, policy_obsはtorch_geometric.data.Batchという形になる.
         # この Batch は、複数のグラフをまとめて扱うためのクラスで、これをself.actor()に入力することで、envs分のlogitsが得られる.
@@ -266,7 +277,7 @@ class EthernalAgentBase(AgentGNNBase,ABC):
             shapes[b] = probs.shape[0]
 
             # nstepを超えているときは、定数でSTOPを返す
-            if info[b]['nstep'] >= self.nstep:
+            if info[b]['nstep'] >= self.nstep and not mask_stop:
                 # ids = [-1 ? -1 -1 ? ? ? STOP]
                 # action_nodes = [? ? ? ? STOP]
                 # probs = [- - - - 10]
@@ -291,12 +302,22 @@ class EthernalAgentBase(AgentGNNBase,ABC):
         # Convert the list of samples back to a tensor
         # actionノードの
         if action is None:
-            # NOTE: 確率処理
-            # 完全なマスク
-            while True:
-                action = categoricals.sample()
-                if all(action <= shapes):
-                    break
+            if deterministic:
+                action = torch.max(batch_logits, axis=-1).indices
+            else:
+                # NOTE: 確率処理
+                # action = categoricals.sample()
+                # 完全なマスク
+                while True:
+                    action = categoricals.sample()
+                    # print(action)
+                    # act100 = categoricals.sample_n(100)
+                    # print(act100.flatten())
+                    # print(torch.exp(categoricals.log_prob(act100.to(device))).flatten())
+                    # if not all(torch.exp(categoricals.log_prob(action)) > 0.01):
+                    #     continue
+                    if all(action <= shapes):
+                        break
             batch_id = torch.arange(policy_obs.num_graphs)
             action_id = act_ids[batch_id, action]
         else:
@@ -534,11 +555,12 @@ class PPGEthernalAgent(EthernalAgentBase,PPGAgent):
         envs,
         device,
         args=None,
+        nstep=10,
         c_hidden=32,
         c_hidden_v=32,
         **kwargs,
     ):
-        super().__init__(envs, device, args)
+        super().__init__(envs, device, args, nstep)
 
         c_in_p = 16
         c_in_v = 11

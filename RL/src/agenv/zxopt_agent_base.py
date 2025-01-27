@@ -85,6 +85,12 @@ class AgentGNNBase(nn.Module):
                 logger.write_scalar(f'detailed_grads/{pascal_name}_mean', param.grad.abs().mean().item(), global_step, only_wandb=True)
                 logger.write_scalar(f'detailed_grads/{pascal_name}_std', param.grad.abs().std().item(), global_step, only_wandb=True)
 
+    # エージェント側で報酬を補正することもできる　
+    def get_rewards(self, rewards: list, next_info: list[dict]) -> list:
+        return rewards
+        
+
+# PPOで訓練できるAgentとして必要なもの
 class PPOAgent(ABC):
     @abstractmethod
     def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
@@ -94,6 +100,7 @@ class PPOAgent(ABC):
     def get_value(self, graph, info):
         pass
 
+# PPGで訓練できるAgentとして必要なもの
 class PPGAgent(ABC):
     @abstractmethod
     def get_next_action(self, graph, info, action=None, device="cpu", testing=False, mask_stop=False):
