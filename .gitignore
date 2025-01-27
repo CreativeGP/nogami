@@ -9,3 +9,4 @@ RL/checkpoints/*
 !RL/checkpoints/shared/*
 RL/runs/
 *.pyc
+Circuit/Nam_benchmark
