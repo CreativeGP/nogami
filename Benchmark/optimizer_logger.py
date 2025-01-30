@@ -3,9 +3,13 @@ from time import time
 import numpy as np
 import pickle
 import json
+import os
 
 class RandomCircuit_OptimizerLogger:
-    def __init__(self, optimizer_name, qubits, gates):
+    def __init__(self):
+        self.optimizer_ = None
+
+    def set_initial(self, optimizer_name, qubits, gates):
         self.optimizer_ = optimizer_name
         self.time_stamp_ = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.qubits_ = qubits
@@ -103,13 +107,16 @@ class RandomCircuit_OptimizerLogger:
         print("mean cliffords reduction rate: ", self.mean_records["mean cliffords reduction rate"])
         print("mean non-cliffords reduction rate: ", self.mean_records["mean non-cliffords reduction rate"])
         filename = f"{self.optimizer_}_rc_{self.qubits_}_{self.gates_}.pkl"
-        with open(save_path + filename, 'wb') as f:
+        with open(os.path.join(save_path, filename), 'wb') as f:
             pickle.dump(self, f)
         
-        with open(save_path + "OverallInfo_" + filename, 'w', encoding="utf-8") as f:
+        filename = f"{self.optimizer_}_overallinfo_rc_{self.qubits_}_{self.gates_}.json"
+        with open(os.path.join(save_path, filename), 'w', encoding="utf-8") as f:
             json.dump(self.mean_records, f, ensure_ascii=False, indent=4)
+        print("Log saved as ", filename)
 
-    def load_log(file_path):
+    @classmethod
+    def load_log(cls, file_path):
         with open(file_path, 'rb') as f:
             return pickle.load(f)
     

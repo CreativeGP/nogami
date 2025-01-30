@@ -1,0 +1,15 @@
+{
+    "mean gates": 108.675,
+    "mean depth": 69.705,
+    "mean tcount": 23.305,
+    "mean twoqubits": 57.265,
+    "mean cliffords": 85.37,
+    "mean non-cliffords": 23.305,
+    "mean execution time": 0.029541690349578858,
+    "mean gates reduction rate": 0.45662499999999995,
+    "mean depth reduction rate": 0.11395842409287912,
+    "mean tcount reduction rate": 0.5358452838859457,
+    "mean twoqubits reduction rate": -0.15463766797212608,
+    "mean cliffords reduction rate": 0.4267817342282633,
+    "mean non-cliffords reduction rate": 0.5358452838859457
+}
