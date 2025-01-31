@@ -13,12 +13,12 @@ from optimizer_logger import RandomCircuit_OptimizerLogger
 if __name__ == '__main__':
     num_tests = 200
     qubits_gates = {}
-    qubits_gates[5] = [50, 100, 150, 200]
-    qubits_gates[10] = [100, 200, 300, 400]
-    qubits_gates[20] = [200, 400, 600, 800]
-    qubits_gates[40] = [400, 800, 1200, 1600]
-    # qubits_gates[80] = [800, 1600, 2400, 3200]
-    # qubits_gates[100] = [1000, 2000, 3000, 4000]
+    # qubits_gates[5] = [50, 100, 150, 200]
+    # qubits_gates[10] = [100, 200, 300, 400]
+    # qubits_gates[20] = [200, 400, 600, 800]
+    # qubits_gates[40] = [400, 800, 1200, 1600]
+    qubits_gates[40] = [1200, 1600]
+    qubits_gates[80] = [800, 1600, 2400, 3200]
     save_path1 = "./rc_records/pyzx_full_reduce"
     save_path2 = "./rc_records/pyzx_cflow"
     os.makedirs(save_path1, exist_ok=True)
